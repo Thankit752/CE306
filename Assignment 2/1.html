@@ -1,408 +1,606 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>เคาน์เตอร์แลกเปลี่ยนเงินตรา</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>กระดานแลกเปลี่ยน THB ⇄ USD</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:        #16261f;
-    --paper:      #f4efe2;
-    --panel:      #fbf8ef;
-    --brass:      #a9762f;
-    --brass-dark: #7c541e;
-    --green:      #1f4d3a;
-    --green-deep: #123527;
-    --rule:       #cdc2a4;
-    --danger:     #a63b2a;
+    --navy-950:#0a1424;
+    --navy-900:#0f1e33;
+    --navy-800:#152a45;
+    --navy-700:#1c3350;
+    --line:#26405e;
+    --amber:#f2a93b;
+    --amber-dim:#a97a2e;
+    --teal:#2dd4bf;
+    --teal-dim:#1f9384;
+    --text:#e9eef5;
+    --muted:#7f96b3;
+    --danger:#e2685c;
   }
 
-  * { box-sizing: border-box; }
+  *{box-sizing:border-box;}
+
+  html,body{margin:0;padding:0;}
 
   body{
-    margin:0;
     min-height:100vh;
     background:
-      radial-gradient(circle at 20% 15%, rgba(31,77,58,0.06), transparent 55%),
-      radial-gradient(circle at 85% 85%, rgba(169,118,47,0.08), transparent 50%),
-      var(--paper);
-    font-family:'IBM Plex Sans Thai','IBM Plex Mono', sans-serif;
-    color: var(--ink);
+      radial-gradient(circle at 15% 8%, rgba(45,212,191,0.07), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(242,169,59,0.06), transparent 45%),
+      var(--navy-950);
+    background-attachment:fixed;
+    font-family:'Noto Sans Thai','Space Mono',monospace;
+    color:var(--text);
+    padding:32px 16px 64px;
     display:flex;
+    flex-direction:column;
     align-items:center;
-    justify-content:center;
-    padding: 48px 20px;
   }
 
-  .kiosk{
-    width: 100%;
-    max-width: 460px;
+  /* faint grille texture, like the perforation on a departures board */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background-image:radial-gradient(rgba(126,150,179,0.08) 1px, transparent 1px);
+    background-size:18px 18px;
+    z-index:0;
+  }
+
+  .board, .history-panel{
+    position:relative;
+    z-index:1;
+    width:100%;
+    max-width:640px;
+  }
+
+  .board{
+    background:linear-gradient(180deg, var(--navy-900), var(--navy-950));
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:28px 28px 24px;
+    box-shadow:0 30px 60px -25px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:18px;
   }
 
   .eyebrow{
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--brass-dark);
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-bottom: 10px;
-  }
-  .eyebrow::before, .eyebrow::after{
-    content:"";
-    height:1px;
-    flex:1;
-    background: var(--rule);
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--teal);
+    margin-bottom:6px;
   }
 
   h1{
-    font-family:'Fraunces', serif;
-    font-optical-sizing: auto;
-    font-weight: 500;
-    font-size: 30px;
-    text-align:center;
-    margin: 0 0 4px;
-    letter-spacing: 0.01em;
+    margin:0;
+    font-family:'Space Mono',monospace;
+    font-size:28px;
+    font-weight:700;
+    letter-spacing:0.02em;
   }
 
-  .subtitle{
-    text-align:center;
-    font-size: 13px;
-    color: #5b5646;
-    margin: 0 0 28px;
+  h1 .arrow{color:var(--amber);}
+
+  .clock-wrap{text-align:right;flex-shrink:0;}
+
+  .clock-label{
+    font-size:10px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:4px;
   }
 
-  .voucher{
-    background: var(--panel);
-    border: 1px solid var(--rule);
-    border-radius: 4px;
-    padding: 34px 30px 40px;
-    position: relative;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 18px 40px -24px rgba(22,38,31,0.35);
+  .clock{
+    font-family:'Space Mono',monospace;
+    font-size:16px;
+    font-variant-numeric:tabular-nums;
+    color:var(--teal);
+    background:rgba(45,212,191,0.08);
+    border:1px solid rgba(45,212,191,0.25);
+    border-radius:6px;
+    padding:4px 9px;
   }
-  .voucher::before{
-    content:"";
-    position:absolute;
-    inset: 8px;
-    border: 1px solid var(--rule);
-    border-radius: 2px;
-    pointer-events:none;
-  }
-
-  .field-row{
-    display:grid;
-    grid-template-columns: 1fr 56px 1fr;
-    align-items:end;
-    gap: 6px;
-    position: relative;
-    z-index:1;
-  }
-
-  .field label{
-    display:block;
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #6b6552;
-    margin-bottom: 8px;
-  }
-
-  .field-currency{
-    font-size: 11px;
-    color: var(--brass-dark);
-    font-weight: 500;
-  }
-
-  .amount-shell{
-    border-bottom: 1.5px solid var(--ink);
-    padding-bottom: 6px;
-    transition: border-color .15s ease;
-  }
-  .amount-shell:focus-within{
-    border-color: var(--brass);
-  }
-
-  /* ช่องที่ระบบคำนวณให้ ไม่ใช่ช่องที่ผู้ใช้กำลังพิมพ์ */
-  .field.is-derived .amount-shell{
-    border-bottom-style: dashed;
-    border-bottom-color: var(--rule);
-  }
-  .field.is-derived input{ color: var(--green); }
-
-  input[type="number"]{
-    width: 100%;
-    border: none;
-    background: transparent;
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 26px;
-    font-weight: 500;
-    color: var(--ink);
-    padding: 0;
-    outline: none;
-  }
-  input[type="number"]::-webkit-outer-spin-button,
-  input[type="number"]::-webkit-inner-spin-button{
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  input[type="number"]{ -moz-appearance: textfield; }
-
-  .swap{
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: 1.5px solid var(--brass);
-    background: var(--paper);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    margin: 0 auto 10px;
-    color: var(--brass-dark);
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 16px;
-    user-select:none;
-    transition: transform .35s cubic-bezier(.2,.8,.2,1);
-  }
-  /* หมุนตามทิศทางการคำนวณจริง: 0deg = ต้นทาง→ปลายทาง, 180deg = ปลายทาง→ต้นทาง */
-  .swap.reverse{ transform: rotate(180deg); }
 
   .rate-strip{
-    margin-top: 26px;
-    padding-top: 18px;
-    border-top: 1px dashed var(--rule);
+    font-family:'Space Mono',monospace;
+    font-size:13px;
+    font-variant-numeric:tabular-nums;
+    text-align:center;
+    color:var(--amber);
+    background:var(--navy-800);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+    margin-bottom:20px;
+    letter-spacing:0.02em;
+  }
+
+  .rate-strip .dot{
+    display:inline-block;
+    width:7px;height:7px;
+    border-radius:50%;
+    background:var(--teal);
+    margin-right:7px;
+    box-shadow:0 0 6px var(--teal);
+    vertical-align:middle;
+  }
+  .rate-strip.offline .dot{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+
+  .converter{
+    display:flex;
+    align-items:stretch;
+    gap:10px;
+    margin-bottom:16px;
+  }
+
+  .tile{
+    flex:1;
+    position:relative;
+    background:linear-gradient(180deg, var(--navy-700) 0%, var(--navy-800) 52%, var(--navy-800) 52%, var(--navy-900) 100%);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 14px 12px;
+    overflow:hidden;
+  }
+
+  /* flap seam line across the middle of the tile */
+  .tile::after{
+    content:"";
+    position:absolute;
+    left:0;right:0;top:50%;
+    height:1px;
+    background:rgba(0,0,0,0.45);
+    box-shadow:0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  .tile label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+
+  .currency-tag{
+    position:absolute;
+    top:14px;right:14px;
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    color:var(--text);
+    background:rgba(255,255,255,0.06);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:2px 9px;
+  }
+
+  .tile input{
+    width:100%;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--amber);
+    font-family:'Space Mono',monospace;
+    font-size:28px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    padding:2px 0 0;
+  }
+  .tile input::placeholder{color:var(--amber-dim);opacity:0.55;}
+  .tile input:focus{color:#ffd68a;}
+
+  .tile.flip{animation:flipTile 0.38s ease;}
+  @keyframes flipTile{
+    0%{transform:scaleY(1);}
+    35%{transform:scaleY(0.92);filter:brightness(1.25);}
+    100%{transform:scaleY(1);}
+  }
+
+  .connector{
+    flex:0 0 auto;
+    align-self:center;
+    width:30px;height:30px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--navy-800);
+    color:var(--teal);
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;
+  }
+
+  .status-line{
+    font-size:13px;
+    color:var(--muted);
+    text-align:center;
+    min-height:18px;
+    margin-bottom:18px;
+  }
+  .status-line.active{color:var(--text);}
+  .status-line .arrow-sep{color:var(--teal);margin:0 6px;}
+
+  .actions{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+
+  button{
+    font-family:'Noto Sans Thai',sans-serif;
+    cursor:pointer;
+  }
+
+  .ghost-btn{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:9px 18px;
+    font-size:13px;
+    font-weight:600;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  .ghost-btn:hover{border-color:var(--teal);color:var(--teal);}
+  .ghost-btn:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+  .ghost-btn.small{padding:6px 12px;font-size:12px;}
+  .ghost-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+
+  .updated-line{
+    text-align:center;
+    font-size:11.5px;
+    color:var(--muted);
+    font-family:'Space Mono',monospace;
+  }
+
+  /* ---- history panel ---- */
+  .history-panel{
+    margin-top:20px;
+    background:var(--navy-900);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 22px 12px;
+  }
+
+  .history-header{
     display:flex;
     align-items:center;
-    justify-content:center;
-    gap: 10px;
-    position: relative;
-    z-index:1;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:10px;
+    flex-wrap:wrap;
   }
-  .rate-strip span{
-    font-size: 12px;
-    color: #6b6552;
-    white-space: nowrap;
+
+  .history-header h2{
+    margin:0;
+    font-size:14px;
+    font-weight:600;
+    color:var(--text);
   }
-  .rate-strip input{
-    width: 74px;
+  .history-header h2 span{color:var(--amber);font-family:'Space Mono',monospace;}
+
+  .history-list{
+    list-style:none;
+    margin:0;padding:0;
+    max-height:320px;
+    overflow-y:auto;
+  }
+
+  .history-list li{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 4px;
+    border-bottom:1px dashed var(--line);
+    font-family:'Space Mono',monospace;
+    font-size:13px;
+    font-variant-numeric:tabular-nums;
+  }
+  .history-list li:last-child{border-bottom:none;}
+
+  .history-list .conv-text{color:var(--text);}
+  .history-list .conv-text b{color:var(--amber);font-weight:700;}
+  .history-list .conv-time{color:var(--muted);font-size:11.5px;flex-shrink:0;}
+
+  .history-empty{
     text-align:center;
-    border: none;
-    border-bottom: 1px solid var(--rule);
-    background: transparent;
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--green-deep);
-    padding: 2px 0;
-    outline: none;
-  }
-  .rate-strip input:focus{ border-color: var(--brass); }
-
-  .receipt{
-    margin: 16px 0 0;
-    text-align:center;
-    position: relative;
-    z-index:1;
-  }
-  .receipt .equation{
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 14px;
-    color: var(--green-deep);
-    letter-spacing: 0.02em;
-  }
-  .receipt .direction{
-    display:block;
-    margin-top: 6px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--brass-dark);
+    color:var(--muted);
+    font-size:13px;
+    padding:18px 4px !important;
+    border-bottom:none !important;
   }
 
-  .err{
-    margin: 14px 0 0;
-    font-size: 12px;
-    color: var(--danger);
-    text-align:center;
-    position: relative;
-    z-index:1;
-  }
-  .err[hidden]{ display:none; }
-
-  .stamp{
-    position:absolute;
-    bottom: 16px;
-    right: 20px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    color: var(--rule);
-    text-transform: uppercase;
+  @media (max-width:520px){
+    .converter{flex-direction:column;}
+    .connector{align-self:center;transform:rotate(90deg);}
+    h1{font-size:22px;}
+    .board{padding:22px 18px 18px;}
+    header{align-items:center;}
   }
 
-  @media (max-width: 380px){
-    .field-row{ grid-template-columns: 1fr 40px 1fr; gap: 4px; }
-    input[type="number"]{ font-size: 20px; }
-    .swap{ width:36px; height:36px; font-size:14px; }
-  }
-
-  @media (prefers-reduced-motion: reduce){
-    .swap{ transition: none; }
+  @media (prefers-reduced-motion:reduce){
+    .tile.flip{animation:none;}
   }
 </style>
 </head>
 <body>
 
-<div class="kiosk">
-  <div class="eyebrow">อัตราแลกเปลี่ยนวันนี้</div>
-  <h1>เคาน์เตอร์แลกเปลี่ยนเงินตรา</h1>
-  <p class="subtitle">กรอกจำนวนเงินที่ช่องใดช่องหนึ่ง อีกช่องจะคำนวณให้อัตโนมัติ</p>
-
-  <div class="voucher">
-    <div class="field-row">
-      <div class="field" id="field-one">
-        <label for="amount-one">ต้นทาง <span class="field-currency">฿ THB</span></label>
-        <div class="amount-shell">
-          <input type="number" id="amount-one" value="100" min="0" step="0.01" inputmode="decimal" />
-        </div>
+  <div class="board">
+    <header>
+      <div>
+        <div class="eyebrow">กระดานอัตราแลกเปลี่ยน</div>
+        <h1>THB <span class="arrow">⇄</span> USD</h1>
       </div>
+      <div class="clock-wrap">
+        <div class="clock-label">เวลาปัจจุบัน</div>
+        <div class="clock" id="liveClock">--:--:--</div>
+      </div>
+    </header>
 
-      <div class="swap" id="swap-icon" aria-hidden="true">⇄</div>
+    <div class="rate-strip offline" id="rateStrip">
+      <span class="dot"></span>กำลังโหลดอัตราแลกเปลี่ยน...
+    </div>
 
-      <div class="field" id="field-two">
-        <label for="amount-two">ปลายทาง <span class="field-currency">$ USD</span></label>
-        <div class="amount-shell">
-          <input type="number" id="amount-two" value="2.86" min="0" step="0.01" inputmode="decimal" />
-        </div>
+    <div class="converter">
+      <div class="tile" data-tile="thb">
+        <span class="currency-tag">🇹🇭 THB</span>
+        <label for="amount-thb">จำนวนเงินต้นทาง</label>
+        <input id="amount-thb" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off">
+      </div>
+      <div class="connector">⇄</div>
+      <div class="tile" data-tile="usd">
+        <span class="currency-tag">🇺🇸 USD</span>
+        <label for="amount-usd">จำนวนเงินปลายทาง</label>
+        <input id="amount-usd" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off">
       </div>
     </div>
 
-    <div class="rate-strip">
-      <span>1 USD =</span>
-      <input type="number" id="rate" value="35" min="0" step="0.01" inputmode="decimal" />
-      <span>THB</span>
+    <div class="status-line" id="statusLine">กรอกจำนวนเงินในช่องใดช่องหนึ่งเพื่อเริ่มแปลงสกุลเงิน</div>
+
+    <div class="actions">
+      <button class="ghost-btn danger" id="clearBtn" type="button">ล้างข้อมูล</button>
+      <button class="ghost-btn" id="refreshBtn" type="button">รีเฟรชอัตรา</button>
     </div>
 
-    <p class="receipt">
-      <span class="equation" id="equation">—</span>
-      <span class="direction" id="direction">ต้นทาง → ปลายทาง</span>
-    </p>
-
-    <p id="err" class="err" role="status" aria-live="polite" hidden></p>
-    <div class="stamp">converted · live</div>
+    <div class="updated-line" id="updatedLine">อัปเดตอัตราล่าสุด: -</div>
   </div>
-</div>
+
+  <div class="history-panel">
+    <div class="history-header">
+      <h2>ประวัติการแปลงเงินย้อนหลัง <span id="historyCount">0</span>/10 รายการล่าสุด</h2>
+      <button class="ghost-btn small" id="clearHistoryBtn" type="button">ล้างประวัติ</button>
+    </div>
+    <ul class="history-list" id="historyList">
+      <li class="history-empty" id="historyEmpty">ยังไม่มีประวัติการแปลงเงิน</li>
+    </ul>
+  </div>
 
 <script>
-  const one     = document.getElementById('amount-one');   // THB (ต้นทาง)
-  const two     = document.getElementById('amount-two');   // USD (ปลายทาง)
-  const rateEl  = document.getElementById('rate');
-  const err     = document.getElementById('err');
-  const swap    = document.getElementById('swap-icon');
-  const equation  = document.getElementById('equation');
-  const direction = document.getElementById('direction');
-  const fieldOne = document.getElementById('field-one');
-  const fieldTwo = document.getElementById('field-two');
+(function(){
+  const FALLBACK_RATE = 32.75; // THB per 1 USD, reference fallback if live fetch is unavailable
+  const state = {
+    rate: FALLBACK_RATE, // THB per 1 USD
+    live: false,
+    syncing: false,
+    history: []
+  };
 
-  // ทิศทางที่ผู้ใช้กรอกล่าสุด ('one' = ต้นทาง→ปลายทาง, 'two' = ปลายทาง→ต้นทาง)
-  // ใช้ตอนแก้อัตราแลกเปลี่ยน เพื่อคำนวณซ้ำในทิศทางเดิมของผู้ใช้
-  let lastEdited = 'one';
+  const thbInput = document.getElementById('amount-thb');
+  const usdInput = document.getElementById('amount-usd');
+  const rateStrip = document.getElementById('rateStrip');
+  const statusLine = document.getElementById('statusLine');
+  const updatedLine = document.getElementById('updatedLine');
+  const clockEl = document.getElementById('liveClock');
+  const historyList = document.getElementById('historyList');
+  const historyEmpty = document.getElementById('historyEmpty');
+  const historyCount = document.getElementById('historyCount');
+  const clearBtn = document.getElementById('clearBtn');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const thbTile = document.querySelector('.tile[data-tile="thb"]');
+  const usdTile = document.querySelector('.tile[data-tile="usd"]');
 
-  function showError(msg){
-    err.textContent = msg;
-    err.hidden = false;
-    equation.textContent = '—';
+  const INITIAL_STATUS = 'กรอกจำนวนเงินในช่องใดช่องหนึ่งเพื่อเริ่มแปลงสกุลเงิน';
+
+  function fmt(num, decimals){
+    return Number(num).toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
   }
 
-  function clearError(){
-    err.hidden = true;
-    err.textContent = '';
+  function parseNum(str){
+    if(!str) return NaN;
+    const cleaned = str.replace(/,/g,'').trim();
+    if(cleaned === '') return NaN;
+    return parseFloat(cleaned);
   }
 
-  function round2(n){
-    return Math.round(n * 100) / 100;
+  function nowStr(){
+    return new Date().toLocaleString('th-TH', {
+      hour:'2-digit', minute:'2-digit', second:'2-digit',
+      day:'2-digit', month:'2-digit', year:'numeric',
+      hour12:false, timeZone:'Asia/Bangkok'
+    });
   }
 
-  function money(n){
-    return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function timeOnly(){
+    return new Date().toLocaleTimeString('th-TH', {
+      hour:'2-digit', minute:'2-digit', second:'2-digit',
+      hour12:false, timeZone:'Asia/Bangkok'
+    });
   }
 
-  // ปรับหน้าตาให้บอกว่าช่องไหนคือช่องที่ระบบคำนวณให้
-  function markDirection(from){
-    const reverse = from === 'two';
-    swap.classList.toggle('reverse', reverse);
-    fieldOne.classList.toggle('is-derived', reverse);
-    fieldTwo.classList.toggle('is-derived', !reverse);
-    direction.textContent = reverse ? 'ปลายทาง → ต้นทาง' : 'ต้นทาง → ปลายทาง';
+  function tickClock(){
+    clockEl.textContent = timeOnly();
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  function updateRateStrip(){
+    const usdToThb = state.rate;
+    const thbToUsd = 1 / state.rate;
+    rateStrip.classList.toggle('offline', !state.live);
+    rateStrip.innerHTML = '<span class="dot"></span>1 USD = ' + fmt(usdToThb, 2) +
+      ' THB &nbsp;·&nbsp; 1 THB = ' + fmt(thbToUsd, 4) + ' USD' +
+      (state.live ? '' : ' <span style="color:var(--muted);font-size:11px;">(ค่าอ้างอิงสำรอง)</span>');
   }
 
-  /**
-   * แปลงค่าแบบสองทิศทาง
-   * from === 'one' : THB → USD  (หาร ด้วยอัตรา)
-   * from === 'two' : USD → THB  (คูณ ด้วยอัตรา)
-   * การกำหนด .value ด้วยสคริปต์ไม่ทำให้เกิด event 'input' จึงไม่เกิดการวนซ้ำ
-   */
-  function convert(from){
-    lastEdited = from;
-    markDirection(from);
+  async function loadRate(isManualRefresh){
+    rateStrip.classList.add('offline');
+    rateStrip.innerHTML = '<span class="dot"></span>กำลังโหลดอัตราแลกเปลี่ยน...';
+    let success = false;
+    try{
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: controller.signal });
+      clearTimeout(timeout);
+      if(res.ok){
+        const data = await res.json();
+        if(data && data.rates && data.rates.THB){
+          state.rate = data.rates.THB;
+          state.live = true;
+          success = true;
+        }
+      }
+    }catch(err){
+      success = false;
+    }
+    if(!success){
+      state.rate = FALLBACK_RATE;
+      state.live = false;
+    }
+    updateRateStrip();
+    updatedLine.textContent = 'อัปเดตอัตราล่าสุด: ' + nowStr();
+    // re-run conversion if a value is already present
+    if(thbInput.value.trim() !== ''){
+      convertFrom('thb', false);
+    } else if(usdInput.value.trim() !== ''){
+      convertFrom('usd', false);
+    }
+  }
 
-    const src = from === 'one' ? one : two;
-    const dst = from === 'one' ? two : one;
+  function flashTile(which){
+    const tile = which === 'thb' ? thbTile : usdTile;
+    tile.classList.remove('flip');
+    // force reflow so animation can retrigger
+    void tile.offsetWidth;
+    tile.classList.add('flip');
+  }
 
-    // ช่องต้นทางว่าง -> ล้างอีกช่อง แล้วรอผู้ใช้พิมพ์ ไม่ต้องขึ้น error
-    if (src.value.trim() === ''){
-      dst.value = '';
-      equation.textContent = '—';
-      clearError();
+  function setStatus(thbVal, usdVal){
+    statusLine.classList.add('active');
+    statusLine.innerHTML = fmt(thbVal, 2) + ' THB <span class="arrow-sep">→</span> ' + fmt(usdVal, 2) + ' USD';
+  }
+
+  function resetStatus(){
+    statusLine.classList.remove('active');
+    statusLine.textContent = INITIAL_STATUS;
+  }
+
+  function convertFrom(source, animateOther){
+    if(state.syncing) return;
+    state.syncing = true;
+    try{
+      if(source === 'thb'){
+        const thb = parseNum(thbInput.value);
+        if(isNaN(thb)){
+          usdInput.value = '';
+          resetStatus();
+        }else{
+          const usd = thb / state.rate;
+          usdInput.value = fmt(usd, 2);
+          setStatus(thb, usd);
+          if(animateOther) flashTile('usd');
+        }
+      }else{
+        const usd = parseNum(usdInput.value);
+        if(isNaN(usd)){
+          thbInput.value = '';
+          resetStatus();
+        }else{
+          const thb = usd * state.rate;
+          thbInput.value = fmt(thb, 2);
+          setStatus(thb, usd);
+          if(animateOther) flashTile('thb');
+        }
+      }
+    } finally {
+      state.syncing = false;
+    }
+  }
+
+  function renderHistory(){
+    historyCount.textContent = state.history.length;
+    if(state.history.length === 0){
+      historyList.innerHTML = '';
+      historyList.appendChild(historyEmpty);
       return;
     }
-
-    const amount = parseFloat(src.value);
-    if (isNaN(amount)){
-      dst.value = '';
-      showError('กรุณากรอกจำนวนเงินเป็นตัวเลข');
-      return;
-    }
-    if (amount < 0){
-      dst.value = '';
-      showError('จำนวนเงินต้องไม่เป็นค่าติดลบ');
-      return;
-    }
-
-    const rate = parseFloat(rateEl.value);
-    if (isNaN(rate) || rate <= 0){
-      dst.value = '';
-      showError('กรุณากรอกอัตราแลกเปลี่ยนให้มากกว่า 0');
-      return;
-    }
-
-    clearError();
-
-    const result = round2(from === 'one' ? amount / rate : amount * rate);
-    dst.value = result;
-
-    const thb = from === 'one' ? amount : result;
-    const usd = from === 'one' ? result : amount;
-    equation.textContent = '฿ ' + money(thb) + '  =  $ ' + money(usd);
+    historyList.innerHTML = '';
+    state.history.forEach(item => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="conv-text"><b>' + fmt(item.thb,2) + '</b> THB → <b>' +
+        fmt(item.usd,2) + '</b> USD</span><span class="conv-time">' + item.time + '</span>';
+      historyList.appendChild(li);
+    });
   }
 
-  // ต้นทาง -> ปลายทาง
-  one.addEventListener('input', () => convert('one'));
+  function logHistory(){
+    const thb = parseNum(thbInput.value);
+    const usd = parseNum(usdInput.value);
+    if(isNaN(thb) || isNaN(usd) || thb <= 0 || usd <= 0) return;
+    const last = state.history[0];
+    if(last && Math.abs(last.thb - thb) < 0.005 && Math.abs(last.usd - usd) < 0.005) return;
+    state.history.unshift({ thb, usd, time: timeOnly() });
+    if(state.history.length > 10) state.history.length = 10;
+    renderHistory();
+  }
 
-  // ปลายทาง -> ต้นทาง (คำนวณย้อนกลับ)
-  two.addEventListener('input', () => convert('two'));
+  // --- bidirectional input handlers ---
+  thbInput.addEventListener('input', () => convertFrom('thb', true));
+  usdInput.addEventListener('input', () => convertFrom('usd', true));
+  thbInput.addEventListener('blur', logHistory);
+  usdInput.addEventListener('blur', logHistory);
+  thbInput.addEventListener('keydown', e => { if(e.key === 'Enter'){ logHistory(); thbInput.blur(); }});
+  usdInput.addEventListener('keydown', e => { if(e.key === 'Enter'){ logHistory(); usdInput.blur(); }});
 
-  // แก้อัตราแลกเปลี่ยน: คำนวณซ้ำในทิศทางที่ผู้ใช้กรอกล่าสุด
-  rateEl.addEventListener('input', () => convert(lastEdited));
+  // --- clear inputs ---
+  clearBtn.addEventListener('click', () => {
+    thbInput.value = '';
+    usdInput.value = '';
+    resetStatus();
+    thbInput.focus();
+  });
 
-  // แสดงผลครั้งแรกจากค่าเริ่มต้นในช่องต้นทาง
-  convert('one');
+  // --- refresh rate ---
+  refreshBtn.addEventListener('click', () => loadRate(true));
+
+  // --- clear history ---
+  clearHistoryBtn.addEventListener('click', () => {
+    state.history = [];
+    renderHistory();
+  });
+
+  // init
+  renderHistory();
+  loadRate(false);
+})();
 </script>
 
 </body>
