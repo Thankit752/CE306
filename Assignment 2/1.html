@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>เคาน์เตอร์แลกเปลี่ยนเงินตรา</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:        #16261f;
+    --paper:      #f4efe2;
+    --panel:      #fbf8ef;
+    --brass:      #a9762f;
+    --brass-dark: #7c541e;
+    --green:      #1f4d3a;
+    --green-deep: #123527;
+    --rule:       #cdc2a4;
+    --danger:     #a63b2a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(31,77,58,0.06), transparent 55%),
+      radial-gradient(circle at 85% 85%, rgba(169,118,47,0.08), transparent 50%),
+      var(--paper);
+    font-family:'IBM Plex Sans Thai','IBM Plex Mono', sans-serif;
+    color: var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 48px 20px;
+  }
+
+  .kiosk{
+    width: 100%;
+    max-width: 460px;
+  }
+
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brass-dark);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom: 10px;
+  }
+  .eyebrow::before, .eyebrow::after{
+    content:"";
+    height:1px;
+    flex:1;
+    background: var(--rule);
+  }
+
+  h1{
+    font-family:'Fraunces', serif;
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-size: 30px;
+    text-align:center;
+    margin: 0 0 4px;
+    letter-spacing: 0.01em;
+  }
+
+  .subtitle{
+    text-align:center;
+    font-size: 13px;
+    color: #5b5646;
+    margin: 0 0 28px;
+  }
+
+  .voucher{
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 34px 30px 40px;
+    position: relative;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 18px 40px -24px rgba(22,38,31,0.35);
+  }
+  .voucher::before{
+    content:"";
+    position:absolute;
+    inset: 8px;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    pointer-events:none;
+  }
+
+  .field-row{
+    display:grid;
+    grid-template-columns: 1fr 56px 1fr;
+    align-items:end;
+    gap: 6px;
+    position: relative;
+    z-index:1;
+  }
+
+  .field label{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b6552;
+    margin-bottom: 8px;
+  }
+
+  .field-currency{
+    font-size: 11px;
+    color: var(--brass-dark);
+    font-weight: 500;
+  }
+
+  .amount-shell{
+    border-bottom: 1.5px solid var(--ink);
+    padding-bottom: 6px;
+    transition: border-color .15s ease;
+  }
+  .amount-shell:focus-within{
+    border-color: var(--brass);
+  }
+
+  /* ช่องที่ระบบคำนวณให้ ไม่ใช่ช่องที่ผู้ใช้กำลังพิมพ์ */
+  .field.is-derived .amount-shell{
+    border-bottom-style: dashed;
+    border-bottom-color: var(--rule);
+  }
+  .field.is-derived input{ color: var(--green); }
+
+  input[type="number"]{
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--ink);
+    padding: 0;
+    outline: none;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button{
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"]{ -moz-appearance: textfield; }
+
+  .swap{
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1.5px solid var(--brass);
+    background: var(--paper);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin: 0 auto 10px;
+    color: var(--brass-dark);
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 16px;
+    user-select:none;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1);
+  }
+  /* หมุนตามทิศทางการคำนวณจริง: 0deg = ต้นทาง→ปลายทาง, 180deg = ปลายทาง→ต้นทาง */
+  .swap.reverse{ transform: rotate(180deg); }
+
+  .rate-strip{
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--rule);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 10px;
+    position: relative;
+    z-index:1;
+  }
+  .rate-strip span{
+    font-size: 12px;
+    color: #6b6552;
+    white-space: nowrap;
+  }
+  .rate-strip input{
+    width: 74px;
+    text-align:center;
+    border: none;
+    border-bottom: 1px solid var(--rule);
+    background: transparent;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--green-deep);
+    padding: 2px 0;
+    outline: none;
+  }
+  .rate-strip input:focus{ border-color: var(--brass); }
+
+  .receipt{
+    margin: 16px 0 0;
+    text-align:center;
+    position: relative;
+    z-index:1;
+  }
+  .receipt .equation{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 14px;
+    color: var(--green-deep);
+    letter-spacing: 0.02em;
+  }
+  .receipt .direction{
+    display:block;
+    margin-top: 6px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brass-dark);
+  }
+
+  .err{
+    margin: 14px 0 0;
+    font-size: 12px;
+    color: var(--danger);
+    text-align:center;
+    position: relative;
+    z-index:1;
+  }
+  .err[hidden]{ display:none; }
+
+  .stamp{
+    position:absolute;
+    bottom: 16px;
+    right: 20px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--rule);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 380px){
+    .field-row{ grid-template-columns: 1fr 40px 1fr; gap: 4px; }
+    input[type="number"]{ font-size: 20px; }
+    .swap{ width:36px; height:36px; font-size:14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .swap{ transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="kiosk">
+  <div class="eyebrow">อัตราแลกเปลี่ยนวันนี้</div>
+  <h1>เคาน์เตอร์แลกเปลี่ยนเงินตรา</h1>
+  <p class="subtitle">กรอกจำนวนเงินที่ช่องใดช่องหนึ่ง อีกช่องจะคำนวณให้อัตโนมัติ</p>
+
+  <div class="voucher">
+    <div class="field-row">
+      <div class="field" id="field-one">
+        <label for="amount-one">ต้นทาง <span class="field-currency">฿ THB</span></label>
+        <div class="amount-shell">
+          <input type="number" id="amount-one" value="100" min="0" step="0.01" inputmode="decimal" />
+        </div>
+      </div>
+
+      <div class="swap" id="swap-icon" aria-hidden="true">⇄</div>
+
+      <div class="field" id="field-two">
+        <label for="amount-two">ปลายทาง <span class="field-currency">$ USD</span></label>
+        <div class="amount-shell">
+          <input type="number" id="amount-two" value="2.86" min="0" step="0.01" inputmode="decimal" />
+        </div>
+      </div>
+    </div>
+
+    <div class="rate-strip">
+      <span>1 USD =</span>
+      <input type="number" id="rate" value="35" min="0" step="0.01" inputmode="decimal" />
+      <span>THB</span>
+    </div>
+
+    <p class="receipt">
+      <span class="equation" id="equation">—</span>
+      <span class="direction" id="direction">ต้นทาง → ปลายทาง</span>
+    </p>
+
+    <p id="err" class="err" role="status" aria-live="polite" hidden></p>
+    <div class="stamp">converted · live</div>
+  </div>
+</div>
+
+<script>
+  const one     = document.getElementById('amount-one');   // THB (ต้นทาง)
+  const two     = document.getElementById('amount-two');   // USD (ปลายทาง)
+  const rateEl  = document.getElementById('rate');
+  const err     = document.getElementById('err');
+  const swap    = document.getElementById('swap-icon');
+  const equation  = document.getElementById('equation');
+  const direction = document.getElementById('direction');
+  const fieldOne = document.getElementById('field-one');
+  const fieldTwo = document.getElementById('field-two');
+
+  // ทิศทางที่ผู้ใช้กรอกล่าสุด ('one' = ต้นทาง→ปลายทาง, 'two' = ปลายทาง→ต้นทาง)
+  // ใช้ตอนแก้อัตราแลกเปลี่ยน เพื่อคำนวณซ้ำในทิศทางเดิมของผู้ใช้
+  let lastEdited = 'one';
+
+  function showError(msg){
+    err.textContent = msg;
+    err.hidden = false;
+    equation.textContent = '—';
+  }
+
+  function clearError(){
+    err.hidden = true;
+    err.textContent = '';
+  }
+
+  function round2(n){
+    return Math.round(n * 100) / 100;
+  }
+
+  function money(n){
+    return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // ปรับหน้าตาให้บอกว่าช่องไหนคือช่องที่ระบบคำนวณให้
+  function markDirection(from){
+    const reverse = from === 'two';
+    swap.classList.toggle('reverse', reverse);
+    fieldOne.classList.toggle('is-derived', reverse);
+    fieldTwo.classList.toggle('is-derived', !reverse);
+    direction.textContent = reverse ? 'ปลายทาง → ต้นทาง' : 'ต้นทาง → ปลายทาง';
+  }
+
+  /**
+   * แปลงค่าแบบสองทิศทาง
+   * from === 'one' : THB → USD  (หาร ด้วยอัตรา)
+   * from === 'two' : USD → THB  (คูณ ด้วยอัตรา)
+   * การกำหนด .value ด้วยสคริปต์ไม่ทำให้เกิด event 'input' จึงไม่เกิดการวนซ้ำ
+   */
+  function convert(from){
+    lastEdited = from;
+    markDirection(from);
+
+    const src = from === 'one' ? one : two;
+    const dst = from === 'one' ? two : one;
+
+    // ช่องต้นทางว่าง -> ล้างอีกช่อง แล้วรอผู้ใช้พิมพ์ ไม่ต้องขึ้น error
+    if (src.value.trim() === ''){
+      dst.value = '';
+      equation.textContent = '—';
+      clearError();
+      return;
+    }
+
+    const amount = parseFloat(src.value);
+    if (isNaN(amount)){
+      dst.value = '';
+      showError('กรุณากรอกจำนวนเงินเป็นตัวเลข');
+      return;
+    }
+    if (amount < 0){
+      dst.value = '';
+      showError('จำนวนเงินต้องไม่เป็นค่าติดลบ');
+      return;
+    }
+
+    const rate = parseFloat(rateEl.value);
+    if (isNaN(rate) || rate <= 0){
+      dst.value = '';
+      showError('กรุณากรอกอัตราแลกเปลี่ยนให้มากกว่า 0');
+      return;
+    }
+
+    clearError();
+
+    const result = round2(from === 'one' ? amount / rate : amount * rate);
+    dst.value = result;
+
+    const thb = from === 'one' ? amount : result;
+    const usd = from === 'one' ? result : amount;
+    equation.textContent = '฿ ' + money(thb) + '  =  $ ' + money(usd);
+  }
+
+  // ต้นทาง -> ปลายทาง
+  one.addEventListener('input', () => convert('one'));
+
+  // ปลายทาง -> ต้นทาง (คำนวณย้อนกลับ)
+  two.addEventListener('input', () => convert('two'));
+
+  // แก้อัตราแลกเปลี่ยน: คำนวณซ้ำในทิศทางที่ผู้ใช้กรอกล่าสุด
+  rateEl.addEventListener('input', () => convert(lastEdited));
+
+  // แสดงผลครั้งแรกจากค่าเริ่มต้นในช่องต้นทาง
+  convert('one');
+</script>
+
+</body>
+</html>
