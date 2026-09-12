@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="th" class="scroll-smooth">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>เขาวงกตมรกต — เกมผจญภัยสำรวจแผนที่</title>
+<meta name="description" content="เกมผจญภัยสำรวจเขาวงกต เก็บอัญมณีให้ครบแล้วหาทางออก เล่นด้วยคีย์บอร์ดได้ทั้งเกม" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['"Chakra Petch"', 'system-ui', 'sans-serif'],
+          body: ['"IBM Plex Sans Thai"', 'system-ui', 'sans-serif']
+        }
+      }
+    }
+  };
+</script>
+
+<style>
+  /* ---------- 1) เคารพการตั้งค่า "ลดการเคลื่อนไหว" ของระบบ ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+    .torch-glow { animation: none !important; }
+  }
+
+  /* แสงคบเพลิงกะพริบเบา ๆ รอบตัวผู้เล่น (ปิดเองเมื่อผู้ใช้ขอลดการเคลื่อนไหว) */
+  @keyframes torch {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(217,119,6,0.75), 0 0 14px 4px rgba(217,119,6,0.35); }
+    50%      { box-shadow: 0 0 0 2px rgba(217,119,6,0.95), 0 0 22px 7px rgba(217,119,6,0.55); }
+  }
+  .torch-glow { animation: torch 2.2s ease-in-out infinite; }
+
+  /* ---------- 2) โหมด Forced colors (High contrast ของ Windows) ---------- */
+  @media (forced-colors: active) {
+    .cell { border: 1px solid CanvasText; background: Canvas !important; color: CanvasText !important; }
+    .cell-wall { background: CanvasText !important; }
+    .cell-hidden { background: GrayText !important; }
+    .cell-player { outline: 3px solid Highlight !important; outline-offset: -3px; }
+    .torch-glow { animation: none !important; box-shadow: none !important; }
+    .panel, #board, dialog { border: 1px solid CanvasText !important; }
+    button, input, select { border: 2px solid ButtonText !important; }
+    .bar-track { border: 1px solid CanvasText; }
+    .bar-fill { background: Highlight !important; forced-color-adjust: none; }
+    .swatch { forced-color-adjust: none; }
+  }
+
+  /* โฟกัสต้องมองเห็นชัดเสมอ */
+  :focus-visible { outline: 3px solid #d97706; outline-offset: 2px; border-radius: 4px; }
+
+  #board { display: grid; gap: 2px; }
+  dialog::backdrop { background: rgba(2, 6, 23, 0.72); }
+  dialog { max-width: min(46rem, 92vw); }
+</style>
+</head>
+
+<body class="min-h-screen bg-slate-200 text-slate-900 font-body antialiased dark:bg-slate-950 dark:text-slate-100">
+
+<a href="#board-section" class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-amber-500 focus:px-4 focus:py-2 focus:font-semibold focus:text-slate-950">ข้ามไปยังกระดานเกม</a>
+
+<div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
+
+  <!-- ============ ส่วนหัว ============ -->
+  <header class="mb-6 flex flex-col gap-4 border-b-2 border-slate-400 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-slate-700">
+    <div>
+      <h1 class="font-display text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-amber-300">เขาวงกตมรกต</h1>
+      <p class="mt-1 max-w-prose text-sm text-slate-700 dark:text-slate-300">เก็บอัญมณีให้ครบทุกเม็ด แล้วหาทางออกให้เจอก่อนคบเพลิงจะดับ</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <button id="btn-help" type="button"
+        class="rounded-md border-2 border-slate-500 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-amber-100 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+        วิธีเล่น <span class="text-xs font-normal text-slate-500 dark:text-slate-400">(H)</span>
+      </button>
+
+      <button id="btn-level-up" type="button"
+        class="rounded-md border-2 border-amber-600 bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 focus:outline-none">
+        เพิ่มระดับความยาก <span class="text-xs font-normal">(L)</span>
+      </button>
+
+      <button id="btn-theme" type="button" aria-pressed="false"
+        class="rounded-md border-2 border-slate-500 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-100 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+        <span id="theme-label">โหมดมืด</span> <span class="text-xs font-normal text-slate-500 dark:text-slate-400">(T)</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+
+    <!-- ============ กระดานเกม ============ -->
+    <section id="board-section" aria-labelledby="board-heading" class="order-1 lg:order-2">
+      <div class="panel rounded-lg border-2 border-slate-400 bg-white p-3 shadow-sm sm:p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="board-heading" class="font-display text-lg font-bold text-slate-900 dark:text-amber-300">แผนที่เขาวงกต</h2>
+          <p id="level-name" class="text-sm font-semibold text-amber-700 dark:text-amber-400">ระดับ: ง่าย</p>
+        </div>
+
+        <!-- กระดาน: โฟกัสได้ด้วยคีย์บอร์ด -->
+        <div id="board" tabindex="0" role="img"
+          aria-label="แผนที่เขาวงกต ใช้ปุ่มลูกศรหรือ W A S D เพื่อเดิน"
+          class="mx-auto aspect-square w-full max-w-[34rem] rounded border-2 border-slate-500 bg-slate-400 p-1 focus:outline-none dark:border-slate-600 dark:bg-slate-800">
+        </div>
+
+        <!-- ปุ่มทิศทางสำหรับจอสัมผัส (กดด้วยคีย์บอร์ดได้เช่นกัน) -->
+        <div class="mt-4 flex justify-center">
+          <div class="grid grid-cols-3 gap-2" role="group" aria-label="ปุ่มบังคับทิศทาง">
+            <div></div>
+            <button type="button" data-dir="up" class="h-12 w-12 rounded-md border-2 border-slate-500 bg-slate-100 text-xl font-bold text-slate-800 transition-colors hover:bg-amber-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="เดินขึ้น">↑</button>
+            <div></div>
+            <button type="button" data-dir="left" class="h-12 w-12 rounded-md border-2 border-slate-500 bg-slate-100 text-xl font-bold text-slate-800 transition-colors hover:bg-amber-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="เดินซ้าย">←</button>
+            <button type="button" data-dir="down" class="h-12 w-12 rounded-md border-2 border-slate-500 bg-slate-100 text-xl font-bold text-slate-800 transition-colors hover:bg-amber-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="เดินลง">↓</button>
+            <button type="button" data-dir="right" class="h-12 w-12 rounded-md border-2 border-slate-500 bg-slate-100 text-xl font-bold text-slate-800 transition-colors hover:bg-amber-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label="เดินขวา">→</button>
+            <div></div>
+          </div>
+        </div>
+
+        <!-- ข้อความแจ้งสถานะ -->
+        <p id="status" role="status" aria-live="polite"
+          class="mt-4 min-h-[3rem] rounded-md border-l-4 border-amber-600 bg-amber-50 px-3 py-2 text-sm font-medium text-slate-800 dark:bg-slate-800 dark:text-slate-100">
+          กรอกชื่อแล้วกด “เริ่มผจญภัย” เพื่อเปิดแผนที่
+        </p>
+      </div>
+
+      <!-- คำอธิบายสัญลักษณ์ -->
+      <div class="panel mt-4 rounded-lg border-2 border-slate-400 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h3 class="font-display text-base font-bold text-slate-900 dark:text-amber-300">สัญลักษณ์บนแผนที่</h3>
+        <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-700 sm:grid-cols-3 dark:text-slate-300">
+          <li><span aria-hidden="true">🧙</span> ตัวคุณ</li>
+          <li><span aria-hidden="true">💎</span> อัญมณี</li>
+          <li><span aria-hidden="true">🧪</span> ยาฟื้นพลัง</li>
+          <li><span aria-hidden="true">👾</span> ปีศาจเฝ้าถ้ำ</li>
+          <li><span aria-hidden="true">🔒</span> ทางออก (ล็อก)</li>
+          <li><span aria-hidden="true">🚪</span> ทางออก (เปิด)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ แผงควบคุม ============ -->
+    <aside class="order-2 flex flex-col gap-4 lg:order-1">
+
+      <!-- ฟอร์มตั้งค่า -->
+      <form id="settings-form" class="panel rounded-lg border-2 border-slate-400 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h2 class="font-display text-lg font-bold text-slate-900 dark:text-amber-300">ตั้งค่าการผจญภัย</h2>
+
+        <div class="mt-3">
+          <label for="player-name" class="block text-sm font-semibold text-slate-800 dark:text-slate-200">ชื่อนักผจญภัย</label>
+          <input id="player-name" name="playerName" type="text" required maxlength="20" value="นักผจญภัย"
+            autocomplete="off"
+            class="mt-1 w-full rounded-md border-2 border-slate-400 bg-slate-50 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-amber-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">ใช้แสดงตอนสรุปผลเมื่อจบเกม</p>
+        </div>
+
+        <fieldset class="mt-4">
+          <legend class="text-sm font-semibold text-slate-800 dark:text-slate-200">ระดับความยาก</legend>
+          <div class="mt-2 grid grid-cols-3 gap-2">
+            <div>
+              <input type="radio" id="lv-0" name="level" value="0" class="peer sr-only" checked />
+              <label for="lv-0" class="block cursor-pointer rounded-md border-2 border-slate-400 bg-slate-50 px-2 py-2 text-center text-sm font-semibold text-slate-700 peer-checked:border-amber-600 peer-checked:bg-amber-500 peer-checked:text-slate-950 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">ง่าย</label>
+            </div>
+            <div>
+              <input type="radio" id="lv-1" name="level" value="1" class="peer sr-only" />
+              <label for="lv-1" class="block cursor-pointer rounded-md border-2 border-slate-400 bg-slate-50 px-2 py-2 text-center text-sm font-semibold text-slate-700 peer-checked:border-amber-600 peer-checked:bg-amber-500 peer-checked:text-slate-950 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">ปานกลาง</label>
+            </div>
+            <div>
+              <input type="radio" id="lv-2" name="level" value="2" class="peer sr-only" />
+              <label for="lv-2" class="block cursor-pointer rounded-md border-2 border-slate-400 bg-slate-50 px-2 py-2 text-center text-sm font-semibold text-slate-700 peer-checked:border-amber-600 peer-checked:bg-amber-500 peer-checked:text-slate-950 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">ยาก</label>
+            </div>
+          </div>
+          <p id="level-desc" class="mt-2 text-xs text-slate-600 dark:text-slate-400"></p>
+        </fieldset>
+
+        <div class="mt-4 flex flex-col gap-2">
+          <button type="submit"
+            class="w-full rounded-md border-2 border-emerald-800 bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-500 focus:outline-none">
+            เริ่มผจญภัย
+          </button>
+          <button id="btn-restart" type="button"
+            class="w-full rounded-md border-2 border-slate-500 bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-800 transition-colors hover:bg-slate-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+            เริ่มใหม่ <span class="text-xs font-normal text-slate-500 dark:text-slate-400">(R)</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- สถานะผู้เล่น -->
+      <section aria-labelledby="stats-heading" class="panel rounded-lg border-2 border-slate-400 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h2 id="stats-heading" class="font-display text-lg font-bold text-slate-900 dark:text-amber-300">สถานะ</h2>
+
+        <dl class="mt-3 space-y-3 text-sm">
+          <div class="flex items-center justify-between gap-2">
+            <dt class="font-semibold text-slate-700 dark:text-slate-300">พลังชีวิต</dt>
+            <dd id="stat-hp" class="font-semibold text-rose-700 dark:text-rose-400">—</dd>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <dt class="font-semibold text-slate-700 dark:text-slate-300">อัญมณี</dt>
+            <dd id="stat-gems" class="font-semibold text-emerald-700 dark:text-emerald-400">—</dd>
+          </div>
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <dt class="font-semibold text-slate-700 dark:text-slate-300">คบเพลิงเหลือ</dt>
+              <dd id="stat-steps" class="font-semibold text-amber-700 dark:text-amber-400">—</dd>
+            </div>
+            <div class="bar-track mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-slate-300 dark:bg-slate-700">
+              <div id="steps-bar" class="bar-fill h-full w-full rounded-full bg-amber-500 transition-[width] duration-200"></div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <dt class="font-semibold text-slate-700 dark:text-slate-300">คะแนนสูงสุดรอบนี้</dt>
+            <dd id="stat-best" class="font-semibold text-slate-900 dark:text-slate-100">0</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- บันทึกการผจญภัย -->
+      <section aria-labelledby="log-heading" class="panel rounded-lg border-2 border-slate-400 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h2 id="log-heading" class="font-display text-lg font-bold text-slate-900 dark:text-amber-300">บันทึกการเดินทาง</h2>
+        <ul id="log" class="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <li class="text-slate-500 dark:text-slate-400">ยังไม่มีบันทึก</li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="mt-8 border-t-2 border-slate-400 pt-4 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-400">
+    <p>ทำงานส่งวิชาเว็บ • สร้างด้วย Tailwind CSS และ JavaScript • รองรับคีย์บอร์ด โหมดมืด การลดการเคลื่อนไหว และ forced colors</p>
+  </footer>
+</div>
+
+<!-- ============ กล่องวิธีเล่น ============ -->
+<dialog id="help-dialog" aria-labelledby="help-title"
+  class="rounded-lg border-2 border-slate-400 bg-white p-0 text-slate-900 backdrop:bg-slate-950/70 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+  <div class="max-h-[80vh] overflow-y-auto p-5 sm:p-6">
+    <h2 id="help-title" class="font-display text-2xl font-bold text-slate-900 dark:text-amber-300">วิธีเล่น</h2>
+
+    <h3 class="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">เป้าหมาย</h3>
+    <p class="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+      เดินสำรวจเขาวงกตเพื่อเก็บอัญมณีให้ครบทุกเม็ด ประตูทางออกจะปลดล็อกก็ต่อเมื่อเก็บครบแล้ว จากนั้นเดินไปเหยียบประตูเพื่อชนะ
+    </p>
+
+    <h3 class="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">กติกา</h3>
+    <ul class="mt-1 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+      <li>คุณมองเห็นเฉพาะบริเวณรอบตัวตามแสงคบเพลิง ช่องที่เคยเห็นแล้วจะจำไว้บนแผนที่</li>
+      <li>ทุกครั้งที่คุณเดิน 1 ก้าว ปีศาจจะขยับตาม 1 ก้าวเช่นกัน</li>
+      <li>ถ้าปีศาจชนคุณ จะเสียพลังชีวิต 1 หน่วย แล้วปีศาจตัวนั้นจะถูกผลักไปที่ไกล ๆ</li>
+      <li>ยาฟื้นพลังเพิ่มพลังชีวิต 1 หน่วย (ไม่เกินค่าสูงสุด)</li>
+      <li>เดินชนกำแพงไม่เสียก้าว แต่จะเสียเวลาเปล่า</li>
+    </ul>
+
+    <h3 class="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">แพ้เมื่อไร</h3>
+    <ul class="mt-1 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+      <li>พลังชีวิตหมด</li>
+      <li>คบเพลิงหมด (จำนวนก้าวที่เดินได้หมด)</li>
+    </ul>
+
+    <h3 class="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">ปุ่มลัดบนคีย์บอร์ด</h3>
+    <ul class="mt-1 grid grid-cols-1 gap-1 text-sm text-slate-700 sm:grid-cols-2 dark:text-slate-300">
+      <li><kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">↑ ↓ ← →</kbd> หรือ <kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">W A S D</kbd> เดิน</li>
+      <li><kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">R</kbd> เริ่มใหม่</li>
+      <li><kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">L</kbd> เพิ่มระดับความยาก</li>
+      <li><kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">H</kbd> เปิดวิธีเล่น</li>
+      <li><kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">T</kbd> สลับโหมดมืด</li>
+      <li><kbd class="rounded border border-slate-400 px-1.5 py-0.5 font-mono text-xs dark:border-slate-600">Esc</kbd> ปิดหน้าต่างนี้</li>
+    </ul>
+
+    <h3 class="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">การคิดคะแนน</h3>
+    <p class="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+      (อัญมณี × 100) + (พลังชีวิตที่เหลือ × 50) + (ก้าวที่เหลือ × 2) แล้วคูณตัวคูณของระดับความยาก: ง่าย ×1, ปานกลาง ×1.5, ยาก ×2
+    </p>
+
+    <button id="help-close" type="button"
+      class="mt-6 w-full rounded-md border-2 border-slate-500 bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+      เข้าใจแล้ว ปิดหน้าต่าง
+    </button>
+  </div>
+</dialog>
+
+<!-- ============ กล่องสรุปผล ============ -->
+<dialog id="result-dialog" aria-labelledby="result-title"
+  class="rounded-lg border-2 border-slate-400 bg-white p-0 text-slate-900 backdrop:bg-slate-950/70 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+  <div class="p-6 text-center">
+    <p id="result-emoji" class="text-5xl" aria-hidden="true">🏆</p>
+    <h2 id="result-title" class="mt-2 font-display text-2xl font-bold text-slate-900 dark:text-amber-300">ชนะแล้ว</h2>
+    <p id="result-detail" class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300"></p>
+    <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+      <div class="rounded-md border-2 border-slate-300 p-2 dark:border-slate-700">
+        <dt class="text-slate-600 dark:text-slate-400">คะแนนรอบนี้</dt>
+        <dd id="result-score" class="font-display text-xl font-bold text-slate-900 dark:text-slate-100">0</dd>
+      </div>
+      <div class="rounded-md border-2 border-slate-300 p-2 dark:border-slate-700">
+        <dt class="text-slate-600 dark:text-slate-400">คะแนนสูงสุด</dt>
+        <dd id="result-best" class="font-display text-xl font-bold text-slate-900 dark:text-slate-100">0</dd>
+      </div>
+    </dl>
+    <div class="mt-5 flex flex-col gap-2 sm:flex-row">
+      <button id="result-again" type="button"
+        class="w-full rounded-md border-2 border-emerald-800 bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 focus:outline-none">
+        เล่นอีกครั้ง
+      </button>
+      <button id="result-close" type="button"
+        class="w-full rounded-md border-2 border-slate-500 bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-200 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+        ดูแผนที่
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= ค่าคงที่ของระดับความยาก ================= */
+  var LEVELS = [
+    { name: 'ง่าย',     size: 9,  gems: 3, monsters: 1, hp: 4, steps: 140, vision: 3, chase: 0.35, potions: 2, mult: 1 },
+    { name: 'ปานกลาง', size: 13, gems: 5, monsters: 2, hp: 3, steps: 190, vision: 2, chase: 0.55, potions: 2, mult: 1.5 },
+    { name: 'ยาก',     size: 17, gems: 7, monsters: 3, hp: 3, steps: 240, vision: 2, chase: 0.8,  potions: 1, mult: 2 }
+  ];
+
+  /* ================= คลาส Tailwind แบบเต็ม (ห้ามต่อสตริง) ================= */
+  var CELL_BASE = 'cell flex items-center justify-center rounded-sm leading-none select-none';
+  var CELL_STYLE = {
+    hidden:   'cell-hidden bg-slate-400 dark:bg-slate-800',
+    wall:     'cell-wall bg-stone-600 dark:bg-stone-700',
+    wallDim:  'cell-wall bg-stone-500 dark:bg-stone-800',
+    floor:    'bg-amber-100 dark:bg-slate-700',
+    floorDim: 'bg-stone-200 dark:bg-slate-900',
+    exit:     'bg-sky-200 dark:bg-sky-900',
+    exitDim:  'bg-sky-100 dark:bg-sky-950',
+    player:   'cell-player bg-amber-300 ring-2 ring-amber-600 dark:bg-amber-700 dark:ring-amber-400',
+    monster:  'bg-rose-300 ring-2 ring-rose-700 dark:bg-rose-900 dark:ring-rose-500'
+  };
+
+  /* ================= อ้างอิง element ================= */
+  var boardEl    = document.getElementById('board');
+  var statusEl   = document.getElementById('status');
+  var logEl      = document.getElementById('log');
+  var levelNameEl= document.getElementById('level-name');
+  var levelDescEl= document.getElementById('level-desc');
+  var hpEl       = document.getElementById('stat-hp');
+  var gemsEl     = document.getElementById('stat-gems');
+  var stepsEl    = document.getElementById('stat-steps');
+  var stepsBarEl = document.getElementById('steps-bar');
+  var bestEl     = document.getElementById('stat-best');
+  var formEl     = document.getElementById('settings-form');
+  var nameInput  = document.getElementById('player-name');
+  var helpDialog = document.getElementById('help-dialog');
+  var resultDialog = document.getElementById('result-dialog');
+  var themeBtn   = document.getElementById('btn-theme');
+  var themeLabel = document.getElementById('theme-label');
+
+  var cells = [];
+  var game = null;
+  var levelIndex = 0;
+  var bestScore = 0;          // เก็บในหน่วยความจำของหน้านี้เท่านั้น
+  var playerName = 'นักผจญภัย';
+
+  /* ================= ฟังก์ชันช่วยทั่วไป ================= */
+  function randInt(n) { return Math.floor(Math.random() * n); }
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = randInt(i + 1);
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  function key(r, c) { return r + ',' + c; }
+
+  /* ================= สร้างเขาวงกตแบบสุ่ม (รับประกันว่าเดินถึงกันทุกช่อง) ================= */
+  function generateMaze(size) {
+    var g = [], r, c;
+    for (r = 0; r < size; r++) {
+      g.push([]);
+      for (c = 0; c < size; c++) g[r].push(1); // 1 = กำแพง, 0 = พื้น
+    }
+
+    var stack = [[1, 1]];
+    g[1][1] = 0;
+    while (stack.length) {
+      var cur = stack[stack.length - 1];
+      var dirs = shuffle([[0, 2], [0, -2], [2, 0], [-2, 0]]);
+      var moved = false;
+      for (var i = 0; i < dirs.length; i++) {
+        var nr = cur[0] + dirs[i][0], nc = cur[1] + dirs[i][1];
+        if (nr > 0 && nc > 0 && nr < size - 1 && nc < size - 1 && g[nr][nc] === 1) {
+          g[cur[0] + dirs[i][0] / 2][cur[1] + dirs[i][1] / 2] = 0;
+          g[nr][nc] = 0;
+          stack.push([nr, nc]);
+          moved = true;
+          break;
+        }
+      }
+      if (!moved) stack.pop();
+    }
+
+    // เจาะกำแพงเพิ่มเล็กน้อยให้มีทางวน จะได้หนีปีศาจได้
+    for (r = 1; r < size - 1; r++) {
+      for (c = 1; c < size - 1; c++) {
+        if (g[r][c] === 1 && Math.random() < 0.14) {
+          var openH = g[r][c - 1] === 0 && g[r][c + 1] === 0;
+          var openV = g[r - 1][c] === 0 && g[r + 1][c] === 0;
+          if (openH || openV) g[r][c] = 0;
+        }
+      }
+    }
+    return g;
+  }
+
+  function bfs(grid, size, sr, sc) {
+    var dist = [], r, c;
+    for (r = 0; r < size; r++) {
+      dist.push([]);
+      for (c = 0; c < size; c++) dist[r].push(-1);
+    }
+    var q = [[sr, sc]];
+    dist[sr][sc] = 0;
+    var head = 0;
+    var D = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (head < q.length) {
+      var cur = q[head++];
+      for (var i = 0; i < 4; i++) {
+        var nr = cur[0] + D[i][0], nc = cur[1] + D[i][1];
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size) continue;
+        if (grid[nr][nc] === 1 || dist[nr][nc] !== -1) continue;
+        dist[nr][nc] = dist[cur[0]][cur[1]] + 1;
+        q.push([nr, nc]);
+      }
+    }
+    return dist;
+  }
+
+  /* ================= เริ่มเกมใหม่ ================= */
+  function newGame() {
+    var cfg = LEVELS[levelIndex];
+    var size = cfg.size;
+    var grid = generateMaze(size);
+
+    var start = { r: 1, c: 1 };
+    var dist = bfs(grid, size, start.r, start.c);
+
+    // หาพื้นทั้งหมดที่เดินถึงได้
+    var floors = [];
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size; c++) {
+        if (grid[r][c] === 0 && dist[r][c] >= 0) floors.push({ r: r, c: c, d: dist[r][c] });
+      }
+    }
+
+    // ทางออก = ช่องที่ไกลจากจุดเริ่มต้นที่สุด
+    var exit = floors[0];
+    floors.forEach(function (f) { if (f.d > exit.d) exit = f; });
+
+    var used = {};
+    used[key(start.r, start.c)] = true;
+    used[key(exit.r, exit.c)] = true;
+
+    function takeSpots(count, minDist) {
+      var pool = shuffle(floors.filter(function (f) {
+        return !used[key(f.r, f.c)] && f.d >= minDist;
+      }));
+      var out = [];
+      for (var i = 0; i < count && i < pool.length; i++) {
+        used[key(pool[i].r, pool[i].c)] = true;
+        out.push({ r: pool[i].r, c: pool[i].c });
+      }
+      return out;
+    }
+
+    var gems = takeSpots(cfg.gems, 3);
+    var potions = takeSpots(cfg.potions, 4);
+    var monsterSpots = takeSpots(cfg.monsters, Math.max(6, Math.floor(exit.d * 0.45)));
+
+    game = {
+      cfg: cfg,
+      size: size,
+      grid: grid,
+      player: { r: start.r, c: start.c },
+      exit: { r: exit.r, c: exit.c },
+      gems: gems,
+      potions: potions,
+      monsters: monsterSpots.map(function (m) { return { r: m.r, c: m.c }; }),
+      hp: cfg.hp,
+      maxHp: cfg.hp,
+      steps: cfg.steps,
+      maxSteps: cfg.steps,
+      totalGems: gems.length,
+      collected: 0,
+      seen: {},
+      visible: {},
+      over: false,
+      won: false
+    };
+
+    buildBoard();
+    updateVisibility();
+    render();
+    updateStats();
+    clearLog();
+    setStatus('เริ่มการผจญภัยของ ' + playerName + ' ที่ระดับ' + cfg.name + ' — เก็บอัญมณีให้ครบ ' + cfg.gems + ' เม็ด');
+    addLog('เปิดแผนที่ขนาด ' + size + '×' + size + ' ช่อง');
+    boardEl.focus();
+  }
+
+  /* ================= สร้าง element ของกระดาน ================= */
+  function buildBoard() {
+    boardEl.innerHTML = '';
+    boardEl.style.gridTemplateColumns = 'repeat(' + game.size + ', minmax(0, 1fr))';
+    cells = [];
+    var total = game.size * game.size;
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < total; i++) {
+      var d = document.createElement('div');
+      d.className = CELL_BASE + ' ' + CELL_STYLE.hidden;
+      d.setAttribute('aria-hidden', 'true');
+      frag.appendChild(d);
+      cells.push(d);
+    }
+    boardEl.appendChild(frag);
+    fitFontSize();
+  }
+
+  function fitFontSize() {
+    if (!game) return;
+    var w = boardEl.clientWidth || 400;
+    var cell = w / game.size;
+    boardEl.style.fontSize = Math.max(7, Math.floor(cell * 0.62)) + 'px';
+  }
+
+  /* ================= ระยะการมองเห็น ================= */
+  function updateVisibility() {
+    game.visible = {};
+    var v = game.cfg.vision;
+    var p = game.player;
+    for (var dr = -v; dr <= v; dr++) {
+      for (var dc = -v; dc <= v; dc++) {
+        var r = p.r + dr, c = p.c + dc;
+        if (r < 0 || c < 0 || r >= game.size || c >= game.size) continue;
+        if (Math.abs(dr) + Math.abs(dc) > v + 1) continue;
+        game.visible[key(r, c)] = true;
+        game.seen[key(r, c)] = true;
+      }
+    }
+  }
+
+  function at(list, r, c) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].r === r && list[i].c === c) return i;
+    }
+    return -1;
+  }
+
+  /* ================= วาดกระดาน ================= */
+  function render() {
+    var size = game.size;
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size; c++) {
+        var el = cells[r * size + c];
+        var k = key(r, c);
+        var seen = !!game.seen[k];
+        var vis = !!game.visible[k];
+        var style, content = '';
+
+        if (!seen) {
+          style = CELL_STYLE.hidden;
+        } else if (game.grid[r][c] === 1) {
+          style = vis ? CELL_STYLE.wall : CELL_STYLE.wallDim;
+        } else {
+          style = vis ? CELL_STYLE.floor : CELL_STYLE.floorDim;
+        }
+
+        if (seen && game.exit.r === r && game.exit.c === c) {
+          style = vis ? CELL_STYLE.exit : CELL_STYLE.exitDim;
+          content = game.collected >= game.totalGems ? '🚪' : '🔒';
+        }
+        if (seen && at(game.potions, r, c) > -1) content = '🧪';
+        if (seen && at(game.gems, r, c) > -1) content = '💎';
+        if (vis && at(game.monsters, r, c) > -1) {
+          style = CELL_STYLE.monster;
+          content = '👾';
+        }
+        if (game.player.r === r && game.player.c === c) {
+          style = CELL_STYLE.player;
+          content = '🧙';
+        }
+
+        var cls = CELL_BASE + ' ' + style;
+        if (game.player.r === r && game.player.c === c && !game.over) cls += ' torch-glow';
+        if (el.className !== cls) el.className = cls;
+        if (el.textContent !== content) el.textContent = content;
+      }
+    }
+    boardEl.setAttribute('aria-label',
+      'แผนที่เขาวงกต ตำแหน่งของคุณคือแถว ' + (game.player.r + 1) + ' คอลัมน์ ' + (game.player.c + 1) +
+      ' เก็บอัญมณีแล้ว ' + game.collected + ' จาก ' + game.totalGems + ' เม็ด');
+  }
+
+  /* ================= แผงสถานะ ================= */
+  function updateStats() {
+    var hearts = '';
+    for (var i = 0; i < game.maxHp; i++) hearts += (i < game.hp ? '❤️' : '🖤');
+    hpEl.textContent = hearts + ' (' + game.hp + '/' + game.maxHp + ')';
+    gemsEl.textContent = game.collected + ' / ' + game.totalGems;
+    stepsEl.textContent = game.steps + ' ก้าว';
+    stepsBarEl.style.width = Math.max(0, (game.steps / game.maxSteps) * 100) + '%';
+    bestEl.textContent = bestScore.toLocaleString('th-TH');
+  }
+
+  function setStatus(msg) { statusEl.textContent = msg; }
+
+  function addLog(msg) {
+    if (logEl.dataset.empty !== 'false') {
+      logEl.innerHTML = '';
+      logEl.dataset.empty = 'false';
+    }
+    var li = document.createElement('li');
+    li.className = 'border-l-2 border-slate-300 pl-2 dark:border-slate-600';
+    li.textContent = msg;
+    logEl.insertBefore(li, logEl.firstChild);
+    while (logEl.children.length > 6) logEl.removeChild(logEl.lastChild);
+  }
+
+  function clearLog() {
+    logEl.innerHTML = '';
+    logEl.dataset.empty = 'false';
+  }
+
+  /* ================= การเดิน ================= */
+  var DIRS = {
+    up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1]
+  };
+
+  function move(dir) {
+    if (!game) { setStatus('กด “เริ่มผจญภัย” ก่อนเพื่อเปิดแผนที่'); return; }
+    if (game.over) { setStatus('เกมจบแล้ว กด R หรือปุ่ม “เริ่มใหม่” เพื่อเล่นอีกครั้ง'); return; }
+
+    var d = DIRS[dir];
+    var nr = game.player.r + d[0];
+    var nc = game.player.c + d[1];
+
+    if (nr < 0 || nc < 0 || nr >= game.size || nc >= game.size || game.grid[nr][nc] === 1) {
+      setStatus('ชนกำแพงหิน เดินทางนั้นไม่ได้');
+      return;
+    }
+
+    game.player.r = nr;
+    game.player.c = nc;
+    game.steps--;
+
+    var messages = [];
+
+    var gi = at(game.gems, nr, nc);
+    if (gi > -1) {
+      game.gems.splice(gi, 1);
+      game.collected++;
+      messages.push('เก็บอัญมณีได้ ' + game.collected + '/' + game.totalGems);
+      addLog('เก็บอัญมณีเม็ดที่ ' + game.collected);
+      if (game.collected >= game.totalGems) {
+        messages.push('ประตูทางออกปลดล็อกแล้ว');
+        addLog('ประตูทางออกปลดล็อก');
+      }
+    }
+
+    var pi = at(game.potions, nr, nc);
+    if (pi > -1) {
+      game.potions.splice(pi, 1);
+      if (game.hp < game.maxHp) {
+        game.hp++;
+        messages.push('ดื่มยาฟื้นพลัง พลังชีวิตเพิ่มเป็น ' + game.hp);
+        addLog('ดื่มยาฟื้นพลัง');
+      } else {
+        messages.push('เจอยาฟื้นพลัง แต่พลังชีวิตเต็มอยู่แล้ว');
+      }
+    }
+
+    moveMonsters(messages);
+    updateVisibility();
+
+    if (!game.over && game.player.r === game.exit.r && game.player.c === game.exit.c) {
+      if (game.collected >= game.totalGems) {
+        finish(true);
+        return;
+      }
+      messages.push('ประตูยังล็อกอยู่ ต้องเก็บอัญมณีให้ครบก่อน');
+    }
+
+    if (!game.over && game.steps <= 0) {
+      render();
+      updateStats();
+      finish(false, 'คบเพลิงดับกลางเขาวงกต');
+      return;
+    }
+
+    render();
+    updateStats();
+    if (messages.length) setStatus(messages.join(' • '));
+    else setStatus('เดินไปทาง' + ({ up: 'บน', down: 'ล่าง', left: 'ซ้าย', right: 'ขวา' })[dir] + ' • เหลือ ' + game.steps + ' ก้าว');
+  }
+
+  function moveMonsters(messages) {
+    var D = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    var dist = bfs(game.grid, game.size, game.player.r, game.player.c);
+
+    for (var i = 0; i < game.monsters.length; i++) {
+      var m = game.monsters[i];
+      var options = [];
+      for (var j = 0; j < 4; j++) {
+        var nr = m.r + D[j][0], nc = m.c + D[j][1];
+        if (nr < 0 || nc < 0 || nr >= game.size || nc >= game.size) continue;
+        if (game.grid[nr][nc] === 1) continue;
+        options.push({ r: nr, c: nc, d: dist[nr][nc] });
+      }
+      if (!options.length) continue;
+
+      if (Math.random() < game.cfg.chase) {
+        options.sort(function (a, b) { return a.d - b.d; });
+        m.r = options[0].r; m.c = options[0].c;
+      } else {
+        var pick = options[randInt(options.length)];
+        m.r = pick.r; m.c = pick.c;
+      }
+
+      if (m.r === game.player.r && m.c === game.player.c) {
+        game.hp--;
+        messages.push('ปีศาจโจมตี เสียพลังชีวิต 1 หน่วย');
+        addLog('ถูกปีศาจโจมตี เหลือพลังชีวิต ' + Math.max(0, game.hp));
+        banishMonster(m, dist);
+        if (game.hp <= 0) {
+          updateVisibility();
+          render();
+          updateStats();
+          finish(false, 'พลังชีวิตหมดลงกลางเขาวงกต');
+          return;
+        }
+      }
+    }
+  }
+
+  function banishMonster(m, dist) {
+    var far = [];
+    for (var r = 0; r < game.size; r++) {
+      for (var c = 0; c < game.size; c++) {
+        if (game.grid[r][c] === 0 && dist[r][c] >= 6) far.push({ r: r, c: c });
+      }
+    }
+    if (far.length) {
+      var pick = far[randInt(far.length)];
+      m.r = pick.r; m.c = pick.c;
+    }
+  }
+
+  /* ================= จบเกม ================= */
+  function finish(won, reason) {
+    game.over = true;
+    game.won = won;
+
+    // เปิดแผนที่ทั้งหมดให้ดูตอนจบ
+    for (var r = 0; r < game.size; r++) {
+      for (var c = 0; c < game.size; c++) game.seen[key(r, c)] = true;
+    }
+    render();
+
+    var score = 0;
+    if (won) {
+      score = Math.round((game.collected * 100 + game.hp * 50 + game.steps * 2) * game.cfg.mult);
+    } else {
+      score = Math.round(game.collected * 100 * game.cfg.mult * 0.5);
+    }
+    if (score > bestScore) bestScore = score;
+    updateStats();
+
+    var title = won ? 'หนีออกมาได้แล้ว' : 'การผจญภัยจบลง';
+    document.getElementById('result-emoji').textContent = won ? '🏆' : '💀';
+    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-detail').textContent = won
+      ? playerName + ' เก็บอัญมณีครบ ' + game.totalGems + ' เม็ด แล้วออกจากเขาวงกตได้สำเร็จ เหลือคบเพลิงอีก ' + game.steps + ' ก้าว'
+      : playerName + ' ' + (reason || 'ไปต่อไม่ไหว') + ' เก็บอัญมณีได้ ' + game.collected + ' จาก ' + game.totalGems + ' เม็ด';
+    document.getElementById('result-score').textContent = score.toLocaleString('th-TH');
+    document.getElementById('result-best').textContent = bestScore.toLocaleString('th-TH');
+
+    setStatus(title + ' — คะแนน ' + score.toLocaleString('th-TH') + ' • กด R เพื่อเริ่มใหม่');
+    addLog(won ? 'ชนะ ได้ ' + score + ' คะแนน' : 'แพ้ ได้ ' + score + ' คะแนน');
+
+    if (typeof resultDialog.showModal === 'function') resultDialog.showModal();
+  }
+
+  /* ================= ระดับความยาก ================= */
+  function setLevel(i, announce) {
+    levelIndex = i;
+    var cfg = LEVELS[i];
+    var radio = document.getElementById('lv-' + i);
+    if (radio) radio.checked = true;
+    levelNameEl.textContent = 'ระดับ: ' + cfg.name;
+    levelDescEl.textContent = 'แผนที่ ' + cfg.size + '×' + cfg.size + ' • อัญมณี ' + cfg.gems +
+      ' เม็ด • ปีศาจ ' + cfg.monsters + ' ตัว • พลังชีวิต ' + cfg.hp + ' • เดินได้ ' + cfg.steps + ' ก้าว';
+    if (announce) setStatus('เปลี่ยนเป็นระดับ' + cfg.name + ' แล้ว กด “เริ่มผจญภัย” เพื่อเปิดแผนที่ใหม่');
+  }
+
+  /* ================= โหมดมืด ================= */
+  function applyTheme(dark) {
+    document.documentElement.classList.toggle('dark', dark);
+    themeBtn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    themeLabel.textContent = dark ? 'โหมดสว่าง' : 'โหมดมืด';
+  }
+
+  var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(!!prefersDark);
+
+  themeBtn.addEventListener('click', function () {
+    applyTheme(!document.documentElement.classList.contains('dark'));
+  });
+
+  /* ================= เหตุการณ์ต่าง ๆ ================= */
+  formEl.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = nameInput.value.trim();
+    playerName = v === '' ? 'นักผจญภัย' : v;
+    var checked = formEl.querySelector('input[name="level"]:checked');
+    setLevel(checked ? parseInt(checked.value, 10) : 0, false);
+    newGame();
+  });
+
+  document.getElementById('btn-restart').addEventListener('click', function () {
+    if (resultDialog.open) resultDialog.close();
+    newGame();
+  });
+
+  document.getElementById('btn-level-up').addEventListener('click', function () {
+    var next = (levelIndex + 1) % LEVELS.length;
+    setLevel(next, true);
+    if (game) {
+      newGame();
+      setStatus('เปลี่ยนเป็นระดับ' + LEVELS[levelIndex].name + ' และสร้างแผนที่ใหม่แล้ว');
+    }
+  });
+
+  Array.prototype.forEach.call(formEl.querySelectorAll('input[name="level"]'), function (radio) {
+    radio.addEventListener('change', function () { setLevel(parseInt(radio.value, 10), true); });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-dir]'), function (btn) {
+    btn.addEventListener('click', function () { move(btn.getAttribute('data-dir')); });
+  });
+
+  document.getElementById('btn-help').addEventListener('click', function () {
+    if (typeof helpDialog.showModal === 'function') helpDialog.showModal();
+  });
+  document.getElementById('help-close').addEventListener('click', function () { helpDialog.close(); });
+  document.getElementById('result-close').addEventListener('click', function () {
+    resultDialog.close();
+    boardEl.focus();
+  });
+  document.getElementById('result-again').addEventListener('click', function () {
+    resultDialog.close();
+    newGame();
+  });
+
+  var KEYMAP = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', a: 'left', s: 'down', d: 'right',
+    W: 'up', A: 'left', S: 'down', D: 'right'
+  };
+
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    if (helpDialog.open || resultDialog.open) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    var dir = KEYMAP[e.key];
+    if (dir) {
+      e.preventDefault();
+      move(dir);
+      return;
+    }
+
+    var k = e.key.toLowerCase();
+    if (k === 'r') { e.preventDefault(); newGame(); }
+    else if (k === 'h') { e.preventDefault(); if (typeof helpDialog.showModal === 'function') helpDialog.showModal(); }
+    else if (k === 'l') { e.preventDefault(); document.getElementById('btn-level-up').click(); }
+    else if (k === 't') { e.preventDefault(); applyTheme(!document.documentElement.classList.contains('dark')); }
+  });
+
+  window.addEventListener('resize', fitFontSize);
+
+  /* ================= ตั้งค่าเริ่มต้น ================= */
+  setLevel(0, false);
+  logEl.dataset.empty = 'true';
+  newGame();
+  setStatus('พร้อมเล่นแล้ว ใช้ปุ่มลูกศรหรือ W A S D เพื่อเดิน • กด H เพื่อดูวิธีเล่น');
+})();
+</script>
+</body>
+</html>
