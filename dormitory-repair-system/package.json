@@ -1,0 +1,20 @@
+{
+  "name": "dormitory-repair-system",
+  "version": "1.0.0",
+  "description": "ระบบแจ้งซ่อมหอพัก — Express + SQLite + JWT + Vanilla JS (Partial DOM Render)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "reset-db": "node -e \"require('fs').rmSync('data/dorm.db',{force:true})\" && node server.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0"
+  }
+}

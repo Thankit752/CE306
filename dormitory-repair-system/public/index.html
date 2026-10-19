@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบแจ้งซ่อมหอพัก</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ===== Header ===== -->
+  <header class="topbar">
+    <div class="brand">🔧 <span>ระบบแจ้งซ่อมหอพัก</span></div>
+    <div id="user-box" class="user-box hidden">
+      <span id="live" class="live" title="ดึงข้อมูลอัตโนมัติทุก 5 วินาที (Partial Render)">● Live</span>
+      <span id="user-name"></span>
+      <span id="user-role" class="role-badge"></span>
+      <button id="btn-logout" class="btn ghost small">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ===== หน้าเข้าสู่ระบบ / สมัครสมาชิก ===== -->
+    <section id="view-auth" class="view hidden">
+      <div class="auth-card card">
+        <h1>แจ้งซ่อม ติดตามสถานะ<br>จัดการงานซ่อมหอพัก</h1>
+        <div class="tabs">
+          <button class="tab active" data-tab="login">เข้าสู่ระบบ</button>
+          <button class="tab" data-tab="register">สมัครสมาชิก (นักศึกษา)</button>
+        </div>
+
+        <form id="form-login" class="form">
+          <label>อีเมล <input name="email" type="email" required autocomplete="username"></label>
+          <label>รหัสผ่าน <input name="password" type="password" required autocomplete="current-password"></label>
+          <button class="btn primary" type="submit">เข้าสู่ระบบ</button>
+          <div class="demo">
+            <span>บัญชีทดลอง:</span>
+            <button type="button" class="chip" data-demo="student">🎓 นักศึกษา</button>
+            <button type="button" class="chip" data-demo="staff">🔧 ช่าง</button>
+            <button type="button" class="chip" data-demo="admin">🗂️ แอดมิน</button>
+          </div>
+        </form>
+
+        <form id="form-register" class="form hidden">
+          <div class="row2">
+            <label>ชื่อ-นามสกุล <input name="name" required></label>
+            <label>รหัสนักศึกษา <input name="student_id" required></label>
+          </div>
+          <div class="row2">
+            <label>อีเมล <input name="email" type="email" required></label>
+            <label>เบอร์โทร <input name="phone"></label>
+          </div>
+          <div class="row2">
+            <label>อาคาร <input name="building" required placeholder="เช่น A"></label>
+            <label>เลขห้อง <input name="room_number" required placeholder="เช่น 205"></label>
+          </div>
+          <label>รหัสผ่าน (อย่างน้อย 6 ตัว) <input name="password" type="password" minlength="6" required></label>
+          <button class="btn primary" type="submit">สมัครสมาชิก</button>
+        </form>
+        <p id="auth-error" class="error"></p>
+      </div>
+    </section>
+
+    <!-- ===== หน้านักศึกษา ===== -->
+    <section id="view-student" class="view hidden">
+      <div class="grid-2">
+        <div class="card">
+          <h2>📝 แจ้งซ่อมใหม่</h2>
+          <p id="student-room" class="muted"></p>
+          <form id="form-request" class="form">
+            <label>ประเภทงานซ่อม
+              <select name="repair_type_id" id="select-type" required></select>
+            </label>
+            <label>รายละเอียดปัญหา
+              <textarea name="description" rows="4" required placeholder="อธิบายอาการ เช่น ก๊อกน้ำรั่วตลอดเวลา"></textarea>
+            </label>
+            <label>แนบรูป (ไม่เกิน 5MB)
+              <input name="image" type="file" accept="image/*" id="input-image">
+            </label>
+            <img id="image-preview" class="preview hidden" alt="ตัวอย่างรูป">
+            <button class="btn primary" type="submit">ส่งคำขอแจ้งซ่อม</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>📋 คำขอของฉัน <span class="count" id="student-count"></span></h2>
+          <div id="student-list" class="req-list"></div>
+          <p class="empty muted hidden" data-empty-for="student-list">ยังไม่มีคำขอแจ้งซ่อม</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== หน้าช่างซ่อม ===== -->
+    <section id="view-staff" class="view hidden">
+      <div class="card">
+        <h2>🧰 งานที่ได้รับมอบหมาย <span class="count" id="staff-count"></span></h2>
+        <div class="filters">
+          <button class="chip active" data-staff-filter="">ทั้งหมด</button>
+          <button class="chip" data-staff-filter="pending">รอดำเนินการ</button>
+          <button class="chip" data-staff-filter="in_progress">กำลังซ่อม</button>
+          <button class="chip" data-staff-filter="done">เสร็จสิ้น</button>
+        </div>
+        <div id="staff-list" class="req-list"></div>
+        <p class="empty muted hidden" data-empty-for="staff-list">ไม่มีงานในหมวดนี้</p>
+      </div>
+    </section>
+
+    <!-- ===== หน้าผู้ดูแลหอพัก ===== -->
+    <section id="view-admin" class="view hidden">
+      <div class="kpis">
+        <div class="kpi card"><div class="kpi-label">คำขอทั้งหมด</div><div class="kpi-value" id="kpi-total">–</div></div>
+        <div class="kpi card"><div class="kpi-label">เวลาเฉลี่ยจนซ่อมเสร็จ</div><div class="kpi-value" id="kpi-resolve">–</div></div>
+        <div class="kpi card"><div class="kpi-label">มอบหมายภายใน 24 ชม. <small>(เป้า 90%)</small></div><div class="kpi-value" id="kpi-assign">–</div></div>
+        <div class="kpi card"><div class="kpi-label">API ตอบสนองเฉลี่ย <small>(เป้า &lt;500ms)</small></div><div class="kpi-value" id="kpi-api">–</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card"><h3>สถานะคำขอ</h3><div id="chart-status" class="bars"></div></div>
+        <div class="card"><h3>ประเภทปัญหา</h3><div id="chart-type" class="bars"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <button class="tab active" data-admin-tab="requests">คำขอแจ้งซ่อม</button>
+          <button class="tab" data-admin-tab="types">ประเภทงานซ่อม</button>
+          <button class="tab" data-admin-tab="staff">ช่างซ่อม</button>
+        </div>
+
+        <div data-admin-panel="requests">
+          <div class="filters">
+            <button class="chip active" data-admin-filter="">ทั้งหมด</button>
+            <button class="chip" data-admin-filter="pending">รอดำเนินการ</button>
+            <button class="chip" data-admin-filter="in_progress">กำลังซ่อม</button>
+            <button class="chip" data-admin-filter="done">เสร็จสิ้น</button>
+            <button class="chip" data-admin-filter="cancelled">ยกเลิก</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>ห้อง</th><th>ประเภท</th><th>รายละเอียด</th><th>สถานะ</th><th>ช่าง</th><th></th></tr></thead>
+              <tbody id="admin-list"></tbody>
+            </table>
+          </div>
+          <p class="empty muted hidden" data-empty-for="admin-list">ไม่มีคำขอในหมวดนี้</p>
+        </div>
+
+        <div data-admin-panel="types" class="hidden">
+          <form id="form-type" class="inline-form">
+            <input name="name" placeholder="ชื่อประเภทงานซ่อมใหม่" required>
+            <button class="btn primary">เพิ่ม</button>
+          </form>
+          <ul id="type-list" class="simple-list"></ul>
+        </div>
+
+        <div data-admin-panel="staff" class="hidden">
+          <form id="form-staff" class="inline-form">
+            <input name="name" placeholder="ชื่อช่าง" required>
+            <input name="email" type="email" placeholder="อีเมล" required>
+            <input name="phone" placeholder="เบอร์โทร">
+            <input name="password" type="password" placeholder="รหัสผ่าน" required>
+            <button class="btn primary">เพิ่มช่าง</button>
+          </form>
+          <ul id="staff-manage-list" class="simple-list"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toasts" class="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>
