@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role          TEXT NOT NULL CHECK (role IN ('student','staff','admin')),
   phone         TEXT,
+  work_start    TEXT,   -- เวลาทำงานของช่าง (fix ไว้) เช่น "08:00"
+  work_end      TEXT,   -- เช่น "16:00"
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -52,9 +54,26 @@ CREATE TABLE IF NOT EXISTS requests (
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   assigned_at       TEXT,   -- ใช้คำนวณ KPI "มอบหมายภายใน 24 ชม."
   completed_at      TEXT,   -- ใช้คำนวณ KPI "เวลาเฉลี่ยจนซ่อมเสร็จ"
-  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))  -- ใช้ตรวจว่าแถวไหนเปลี่ยน (Partial Render)
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),  -- ใช้ตรวจว่าแถวไหนเปลี่ยน (Partial Render)
+  avail_start       TEXT,   -- ช่วงเวลาที่นักศึกษาสะดวก (เวลาท้องถิ่น "YYYY-MM-DDTHH:MM")
+  avail_end         TEXT,
+  scheduled_at      TEXT,   -- เวลานัดเข้าซ่อม
+  auto_assigned     INTEGER NOT NULL DEFAULT 0  -- 1 = ระบบจัดช่างให้เอง (ใช้คำนวณ KPI)
 );
 `);
+
+// ---------- Migration: ฐานข้อมูลเก่าที่ยังไม่มีคอลัมน์เวลานัด ----------
+const requestCols = db.prepare('PRAGMA table_info(requests)').all().map((c) => c.name);
+for (const col of ['avail_start', 'avail_end', 'scheduled_at']) {
+  if (!requestCols.includes(col)) db.exec(`ALTER TABLE requests ADD COLUMN ${col} TEXT`);
+}
+if (!requestCols.includes('auto_assigned')) {
+  db.exec('ALTER TABLE requests ADD COLUMN auto_assigned INTEGER NOT NULL DEFAULT 0');
+}
+const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+for (const col of ['work_start', 'work_end']) {
+  if (!userCols.includes(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
+}
 
 // ---------- Seed ข้อมูลตัวอย่าง (รันครั้งแรกเท่านั้น) ----------
 const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
@@ -65,7 +84,11 @@ if (userCount === 0) {
   );
   addUser.run('ผู้ดูแลหอพัก', null, 'admin@dorm.test', hash('admin123'), 'admin', '081-000-0000');
   const s1 = addUser.run('ช่างสมชาย', null, 'staff1@dorm.test', hash('staff123'), 'staff', '081-111-1111');
-  addUser.run('ช่างสมหญิง', null, 'staff2@dorm.test', hash('staff123'), 'staff', '081-222-2222');
+  const s2 = addUser.run('ช่างสมหญิง', null, 'staff2@dorm.test', hash('staff123'), 'staff', '081-222-2222');
+  // ช่างแต่ละคนมีเวลาทำงาน fix ไว้ — ระบบใช้จัดงานให้อัตโนมัติ
+  const setHours = db.prepare('UPDATE users SET work_start = ?, work_end = ? WHERE id = ?');
+  setHours.run('08:00', '16:00', s1.lastInsertRowid);
+  setHours.run('12:00', '20:00', s2.lastInsertRowid);
   const st = addUser.run('นักศึกษา ตัวอย่าง', '65010001', 'student@dorm.test', hash('student123'), 'student', '089-999-9999');
 
   const addType = db.prepare('INSERT INTO repair_types (name) VALUES (?)');
@@ -90,5 +113,8 @@ if (userCount === 0) {
 
   console.log('✔ สร้างฐานข้อมูลและข้อมูลตัวอย่างแล้ว');
 }
+
+// ช่างที่ยังไม่มีเวลาทำงาน (เช่น จากฐานข้อมูลเก่า) ให้ใช้ค่าเริ่มต้น 08:00–17:00
+db.exec("UPDATE users SET work_start = '08:00', work_end = '17:00' WHERE role = 'staff' AND work_start IS NULL");
 
 module.exports = db;

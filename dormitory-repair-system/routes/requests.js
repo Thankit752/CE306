@@ -1,9 +1,9 @@
 // ============================================================
 // routes/requests.js — CRUD ของ "คำขอแจ้งซ่อม" (Repair Request)
-//   POST   /api/requests              แจ้งซ่อมใหม่ (student)  + อัปโหลดรูป
+//   POST   /api/requests              แจ้งซ่อมใหม่ (student) + อัปโหลดรูป → ระบบจัดช่างที่ว่างให้อัตโนมัติ
 //   GET    /api/requests              ดูรายการ (กรองตาม role อัตโนมัติ)
 //   GET    /api/requests/:id          ดูรายละเอียด
-//   PUT    /api/requests/:id/assign   มอบหมายช่าง (admin)
+//   PUT    /api/requests/:id/assign   มอบหมายช่างเอง (admin) → ระบบหาเวลาว่างของช่างคนนั้นให้
 //   PUT    /api/requests/:id/status   อัปเดตสถานะ (staff / admin)
 //   DELETE /api/requests/:id          ยกเลิกคำขอ (student เจ้าของ / admin)
 // ============================================================
@@ -12,6 +12,7 @@ const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
 const db = require('../db');
+const { findSlot } = require('../scheduler');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -51,11 +52,22 @@ function findRequest(id) {
   return db.prepare(`${BASE_SELECT} WHERE r.id = ?`).get(id);
 }
 
+// รูปแบบจาก <input type="datetime-local"> เช่น "2026-10-20T13:30"
+function isDateTime(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s);
+}
+
 // ---------- CREATE ----------
 router.post('/', authorize('student'), upload.single('image'), (req, res) => {
-  const { repair_type_id, description } = req.body || {};
+  const { repair_type_id, description, avail_start, avail_end } = req.body || {};
   if (!repair_type_id || !description?.trim()) {
     return res.status(400).json({ error: 'กรุณาเลือกประเภทและระบุรายละเอียด' });
+  }
+  if (!isDateTime(avail_start) || !isDateTime(avail_end)) {
+    return res.status(400).json({ error: 'กรุณาระบุช่วงเวลาที่สะดวกให้ช่างเข้าซ่อม' });
+  }
+  if (avail_end <= avail_start) {
+    return res.status(400).json({ error: 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น' });
   }
   const room = db.prepare('SELECT id FROM rooms WHERE user_id = ?').get(req.user.id);
   if (!room) return res.status(400).json({ error: 'ไม่พบห้องพักของคุณ' });
@@ -65,8 +77,18 @@ router.post('/', authorize('student'), upload.single('image'), (req, res) => {
 
   const image_url = req.file ? `/uploads/${req.file.filename}` : null;
   const result = db
-    .prepare('INSERT INTO requests (user_id, room_id, repair_type_id, description, image_url) VALUES (?, ?, ?, ?, ?)')
-    .run(req.user.id, room.id, repair_type_id, description.trim(), image_url);
+    .prepare(`INSERT INTO requests (user_id, room_id, repair_type_id, description, image_url, avail_start, avail_end)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(req.user.id, room.id, repair_type_id, description.trim(), image_url, avail_start, avail_end);
+
+  // จัดช่างที่ว่างในช่วงที่นักศึกษาสะดวกให้ทันที (ถ้าไม่มีใครว่าง → รอแอดมินมอบหมาย)
+  const slot = findSlot(avail_start, avail_end);
+  if (slot) {
+    db.prepare(`
+      UPDATE requests SET assigned_staff_id = ?, scheduled_at = ?, auto_assigned = 1,
+                          assigned_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?`).run(slot.staff_id, slot.scheduled_at, result.lastInsertRowid);
+  }
 
   res.status(201).json(findRequest(result.lastInsertRowid));
 });
@@ -102,10 +124,14 @@ router.put('/:id/assign', authorize('admin'), (req, res) => {
   const staff = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'staff'").get(req.body?.staff_id);
   if (!staff) return res.status(400).json({ error: 'ไม่พบช่างที่เลือก' });
 
+  // ล้างนัดเดิมก่อน แล้วหาเวลาว่างของช่างคนนี้ในช่วงที่นักศึกษาสะดวก (ไม่ว่างเลย → ยังไม่มีเวลานัด)
+  db.prepare('UPDATE requests SET scheduled_at = NULL WHERE id = ?').run(row.id);
+  const slot = findSlot(row.avail_start, row.avail_end, staff.id);
   db.prepare(`
     UPDATE requests
-    SET assigned_staff_id = ?, assigned_at = COALESCE(assigned_at, datetime('now')), updated_at = datetime('now')
-    WHERE id = ?`).run(staff.id, row.id);
+    SET assigned_staff_id = ?, scheduled_at = ?, auto_assigned = 0,
+        assigned_at = COALESCE(assigned_at, datetime('now')), updated_at = datetime('now')
+    WHERE id = ?`).run(staff.id, slot ? slot.scheduled_at : null, row.id);
   res.json(findRequest(row.id));
 });
 

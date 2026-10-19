@@ -220,7 +220,71 @@ function initStudent() {
   $('#select-type').innerHTML =
     '<option value="">— เลือกประเภท —</option>' +
     state.repairTypes.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  renderAvailPicker();
 }
+
+// ---------- ตัวเลือกวัน/ช่วงเวลาที่สะดวก (กดปุ่มแทนการพิมพ์วันที่) ----------
+const SLOTS = [
+  { key: 'morning', label: '🌅 เช้า', from: '08:00', to: '12:00' },
+  { key: 'afternoon', label: '☀️ บ่าย', from: '12:00', to: '16:00' },
+  { key: 'evening', label: '🌆 เย็น', from: '16:00', to: '20:00' },
+  { key: 'allday', label: 'ทั้งวัน', from: '08:00', to: '20:00' },
+];
+const pick = { date: null, slot: null };
+
+// วันที่ตามเวลาเครื่อง (ไม่ใช้ toISOString เพราะจะกลายเป็นเวลา UTC)
+function localDate(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function renderAvailPicker() {
+  const days = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const label = i === 0 ? 'วันนี้' : i === 1 ? 'พรุ่งนี้'
+      : d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' });
+    return { value: localDate(d), label };
+  });
+  $('#date-chips').innerHTML = days
+    .map((d) => `<button type="button" class="chip ${pick.date === d.value ? 'active' : ''}" data-date="${d.value}">${d.label}</button>`)
+    .join('');
+
+  // วันนี้: ช่วงเวลาที่เลยไปแล้วกดไม่ได้
+  const now = new Date();
+  const nowHM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const isToday = pick.date === localDate(now);
+  $('#slot-chips').innerHTML = SLOTS
+    .map((s) => {
+      const past = isToday && s.to <= nowHM;
+      if (past && pick.slot === s.key) pick.slot = null;
+      return `<button type="button" class="chip ${pick.slot === s.key ? 'active' : ''}" data-slot="${s.key}" ${past ? 'disabled' : ''}>
+        ${s.label} <small>${s.from}–${s.to}</small></button>`;
+    })
+    .join('');
+
+  const slot = SLOTS.find((s) => s.key === pick.slot);
+  const form = $('#form-request');
+  form.avail_start.value = pick.date && slot ? `${pick.date}T${slot.from}` : '';
+  form.avail_end.value = pick.date && slot ? `${pick.date}T${slot.to}` : '';
+  $('#avail-summary').textContent = form.avail_start.value
+    ? `สะดวก ${fmtLocal(form.avail_start.value)} – ${slot.to} น.`
+    : 'ยังไม่ได้เลือกเวลา';
+}
+
+$('#date-chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-date]');
+  if (!btn) return;
+  pick.date = btn.dataset.date;
+  renderAvailPicker();
+});
+
+$('#slot-chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-slot]');
+  if (!btn || btn.disabled) return;
+  pick.slot = btn.dataset.slot;
+  renderAvailPicker();
+});
 
 $('#input-image').addEventListener('change', (e) => {
   const file = e.target.files[0];
@@ -231,17 +295,41 @@ $('#input-image').addEventListener('change', (e) => {
 
 $('#form-request').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!e.target.avail_start.value) return toast('กรุณาเลือกวันและช่วงเวลาที่สะดวก', true);
   try {
     // ใช้ FormData เพราะต้องส่งไฟล์รูป (multipart/form-data)
     const created = await api('/requests', { method: 'POST', form: new FormData(e.target) });
     e.target.reset();
+    pick.date = pick.slot = null;
+    renderAvailPicker();
     $('#image-preview').classList.add('hidden');
-    toast(`ส่งคำขอ #${created.id} แล้ว`);
+    toast(created.scheduled_at
+      ? `ส่งคำขอ #${created.id} แล้ว · ${created.staff_name} จะเข้าซ่อม ${fmtLocal(created.scheduled_at)} น.`
+      : `ส่งคำขอ #${created.id} แล้ว · ยังไม่มีช่างว่างในช่วงนี้ แอดมินจะจัดให้`);
     await refresh(); // วาดเฉพาะการ์ดใหม่ที่เพิ่มเข้ามา
   } catch (err) {
     toast(err.message, true);
   }
 });
+
+// เวลาจาก datetime-local ("2026-10-20T13:30") เป็นเวลาท้องถิ่นอยู่แล้ว ไม่ต้องแปลง timezone
+function fmtLocal(s) {
+  if (!s) return '-';
+  return new Date(s).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+// บรรทัดแสดงช่วงเวลาที่นักศึกษาสะดวก + เวลานัดที่ระบบจัดให้
+function scheduleInfo(r) {
+  const avail = r.avail_start ? `${fmtLocal(r.avail_start)} – ${r.avail_end.slice(11)} น.` : 'ไม่ได้ระบุ';
+  const appt = r.scheduled_at
+    ? `<b class="appt">📅 นัดซ่อม ${fmtLocal(r.scheduled_at)} น.${r.staff_name ? ` · ${esc(r.staff_name)}` : ''}</b>`
+    : ['done', 'cancelled'].includes(r.status)
+      ? ''
+      : r.assigned_staff_id
+        ? '<span class="muted">ยังไม่ได้กำหนดเวลานัด</span>'
+        : '<span class="muted">⏳ ยังไม่มีช่างว่างในช่วงนี้ รอแอดมินจัดให้</span>';
+  return `<div class="req-meta">🕒 นักศึกษาสะดวก: ${avail}</div><div class="req-meta">${appt}</div>`;
+}
 
 function stepsBar(status) {
   const n = { pending: 1, in_progress: 2, done: 3, cancelled: 0 }[status];
@@ -259,6 +347,7 @@ function renderStudentCard(r) {
       </div>
       <p class="req-desc">${esc(r.description)}</p>
       <div class="req-meta">แจ้งเมื่อ ${fmtTime(r.created_at)} · ช่าง: ${esc(r.staff_name || 'ยังไม่มอบหมาย')}</div>
+      ${scheduleInfo(r)}
       ${stepsBar(r.status)}
       ${r.status === 'pending' ? `<div class="req-actions"><button class="btn danger small" data-cancel="${r.id}">ยกเลิกคำขอ</button></div>` : ''}
     </div>
@@ -295,6 +384,7 @@ function renderStaffCard(r) {
       </div>
       <p class="req-desc">${esc(r.description)}</p>
       <div class="req-meta">ผู้แจ้ง: ${esc(r.user_name)} (${esc(r.user_phone || '-')}) · แจ้งเมื่อ ${fmtTime(r.created_at)}</div>
+      ${scheduleInfo(r)}
       ${next ? `<div class="req-actions">${next}</div>` : ''}
     </div>
   </div>`;
@@ -329,6 +419,19 @@ async function initAdmin() {
   renderStaffManageList();
 }
 
+// ช่องช่างในตารางแอดมิน: ระบบจัดให้แล้ว → แสดงชื่อ + ปุ่มเปลี่ยนช่าง (กรณีพิเศษ)
+//                        ระบบหาช่างว่างไม่ได้ → ให้แอดมินเลือกเอง
+function staffCell(r, options) {
+  const select = (hidden) =>
+    `<select data-assign="${r.id}" class="${hidden ? 'hidden' : ''}"><option value="">— เลือกช่าง —</option>${options}</select>`;
+  if (!r.assigned_staff_id) {
+    return `<span class="need-assign">⏳ ต้องจัดช่างเอง</span>${select(false)}`;
+  }
+  return `<b>${esc(r.staff_name)}</b>
+    <div class="req-meta">${r.auto_assigned ? '🤖 ระบบจัดให้' : '👤 แอดมินเลือก'}</div>
+    <button class="link-btn" data-change-staff="${r.id}">เปลี่ยนช่าง</button>${select(true)}`;
+}
+
 function renderAdminRow(r) {
   const closed = ['done', 'cancelled'].includes(r.status);
   const options = state.staff
@@ -341,11 +444,9 @@ function renderAdminRow(r) {
     <td>${esc(r.repair_type)}</td>
     <td class="desc">${esc(r.description)}
       ${r.image_url ? ` <a href="${esc(r.image_url)}" target="_blank">📷</a>` : ''}
-      <div class="req-meta">${fmtTime(r.created_at)}</div></td>
+      <div class="req-meta">${fmtTime(r.created_at)}</div>${scheduleInfo(r)}</td>
     <td>${statusBadge(r.status)}</td>
-    <td>${closed
-      ? esc(r.staff_name || '-')
-      : `<select data-assign="${r.id}"><option value="">— มอบหมาย —</option>${options}</select>`}</td>
+    <td>${closed ? esc(r.staff_name || '-') : staffCell(r, options)}</td>
     <td>${closed ? '' : `<button class="btn danger small" data-admin-cancel="${r.id}">ยกเลิก</button>`}</td>
   </tr>`;
 }
@@ -363,6 +464,12 @@ $('#admin-list').addEventListener('change', async (e) => {
 });
 
 $('#admin-list').addEventListener('click', async (e) => {
+  const changeId = e.target.dataset.changeStaff;
+  if (changeId) {
+    e.target.classList.add('hidden');
+    $(`[data-assign="${changeId}"]`).classList.remove('hidden');
+    return;
+  }
   const id = e.target.dataset.adminCancel;
   if (!id || !confirm(`ยืนยันยกเลิกคำขอ #${id}?`)) return;
   try {
@@ -407,7 +514,7 @@ async function refreshStats() {
   $('#kpi-total').textContent = s.total;
   $('#kpi-resolve').textContent = s.kpi.avgResolveHours == null ? '–' : `${s.kpi.avgResolveHours} ชม.`;
 
-  const pct = s.kpi.assignedWithin24hPct;
+  const pct = s.kpi.autoAssignedPct;
   $('#kpi-assign').textContent = pct == null ? '–' : `${pct}%`;
   $('#kpi-assign').className = 'kpi-value ' + (pct == null ? '' : pct >= 90 ? 'good' : 'bad');
 
@@ -477,6 +584,8 @@ function renderStaffManageList() {
       <li>
         <input class="grow" value="${esc(s.name)}" data-staff-name="${s.id}">
         <input class="grow" value="${esc(s.phone || '')}" placeholder="เบอร์โทร" data-staff-phone="${s.id}">
+        <span class="hours">🕘 <input type="time" value="${esc(s.work_start || '')}" data-staff-start="${s.id}">
+          – <input type="time" value="${esc(s.work_end || '')}" data-staff-end="${s.id}"></span>
         <span class="muted">${esc(s.email)} · ค้าง ${s.active_jobs || 0} · เสร็จ ${s.done_jobs || 0}</span>
         <button class="btn small" data-staff-save="${s.id}">บันทึก</button>
         <button class="btn danger small" data-staff-del="${s.id}">ลบ</button>
@@ -510,7 +619,12 @@ $('#staff-manage-list').addEventListener('click', async (e) => {
     if (staffSave) {
       await api(`/staff/${staffSave}`, {
         method: 'PUT',
-        body: { name: $(`[data-staff-name="${staffSave}"]`).value, phone: $(`[data-staff-phone="${staffSave}"]`).value },
+        body: {
+          name: $(`[data-staff-name="${staffSave}"]`).value,
+          phone: $(`[data-staff-phone="${staffSave}"]`).value,
+          work_start: $(`[data-staff-start="${staffSave}"]`).value,
+          work_end: $(`[data-staff-end="${staffSave}"]`).value,
+        },
       });
       toast('บันทึกแล้ว');
     }

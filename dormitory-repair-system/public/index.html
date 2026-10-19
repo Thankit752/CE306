@@ -75,6 +75,17 @@
             <label>รายละเอียดปัญหา
               <textarea name="description" rows="4" required placeholder="อธิบายอาการ เช่น ก๊อกน้ำรั่วตลอดเวลา"></textarea>
             </label>
+            <div class="field">
+              <span class="field-label">วันที่สะดวกให้ช่างเข้า</span>
+              <div id="date-chips" class="chips"></div>
+            </div>
+            <div class="field">
+              <span class="field-label">ช่วงเวลา</span>
+              <div id="slot-chips" class="chips"></div>
+            </div>
+            <input type="hidden" name="avail_start">
+            <input type="hidden" name="avail_end">
+            <p id="avail-summary" class="avail-summary muted">ยังไม่ได้เลือกเวลา</p>
             <label>แนบรูป (ไม่เกิน 5MB)
               <input name="image" type="file" accept="image/*" id="input-image">
             </label>
@@ -110,7 +121,7 @@
       <div class="kpis">
         <div class="kpi card"><div class="kpi-label">คำขอทั้งหมด</div><div class="kpi-value" id="kpi-total">–</div></div>
         <div class="kpi card"><div class="kpi-label">เวลาเฉลี่ยจนซ่อมเสร็จ</div><div class="kpi-value" id="kpi-resolve">–</div></div>
-        <div class="kpi card"><div class="kpi-label">มอบหมายภายใน 24 ชม. <small>(เป้า 90%)</small></div><div class="kpi-value" id="kpi-assign">–</div></div>
+        <div class="kpi card"><div class="kpi-label">จัดช่างอัตโนมัติสำเร็จ <small>(เป้า 90%)</small></div><div class="kpi-value" id="kpi-assign">–</div></div>
         <div class="kpi card"><div class="kpi-label">API ตอบสนองเฉลี่ย <small>(เป้า &lt;500ms)</small></div><div class="kpi-value" id="kpi-api">–</div></div>
       </div>
 
@@ -157,6 +168,8 @@
             <input name="email" type="email" placeholder="อีเมล" required>
             <input name="phone" placeholder="เบอร์โทร">
             <input name="password" type="password" placeholder="รหัสผ่าน" required>
+            <span class="hours">เวลาทำงาน <input name="work_start" type="time" value="08:00" required>
+              – <input name="work_end" type="time" value="17:00" required></span>
             <button class="btn primary">เพิ่มช่าง</button>
           </form>
           <ul id="staff-manage-list" class="simple-list"></ul>

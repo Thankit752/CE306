@@ -143,3 +143,16 @@ td select { min-width: 130px; padding: 5px 8px; }
 .toast { background: #1d2433; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.15); animation: in .25s; max-width: 340px; }
 .toast.err { background: var(--danger); }
 @keyframes in { from { transform: translateY(10px); opacity: 0; } }
+
+/* ---------- เวลานัดซ่อม ---------- */
+.appt { color: var(--done); font-weight: 500; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label { font-size: 14px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip small { opacity: .75; margin-left: 2px; }
+.chip:disabled { opacity: .4; cursor: not-allowed; }
+.avail-summary { margin: 0; font-size: 14px; }
+.hours { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.hours input[type="time"] { width: auto; padding: 4px 6px; }
+.need-assign { display: block; color: #b45309; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.link-btn { font: inherit; font-size: 13px; background: none; border: none; padding: 0; color: var(--primary); cursor: pointer; text-decoration: underline; }

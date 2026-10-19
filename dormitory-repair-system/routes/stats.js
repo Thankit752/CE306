@@ -20,14 +20,12 @@ router.get('/', authenticate, authorize('admin'), (req, res) => {
     SELECT AVG((julianday(completed_at) - julianday(created_at)) * 24) AS h
     FROM requests WHERE status = 'done' AND completed_at IS NOT NULL`).get().h;
 
-  // KPI 2: % คำขอที่ได้รับมอบหมายภายใน 24 ชั่วโมง (เป้าหมาย 90%)
-  const assign = db.prepare(`
-    SELECT COUNT(*) AS total,
-           SUM(CASE WHEN assigned_at IS NOT NULL
-                     AND (julianday(assigned_at) - julianday(created_at)) * 24 <= 24 THEN 1 ELSE 0 END) AS within
+  // KPI 2: % คำขอที่ระบบจัดช่างว่างให้ได้เองทันที (เป้าหมาย 90%)
+  //   นับเฉพาะคำขอที่นักศึกษาระบุช่วงเวลาสะดวก (คำขอแบบใหม่) — ถ้าต่ำแปลว่าช่างไม่พอในบางช่วง
+  const auto = db.prepare(`
+    SELECT COUNT(*) AS total, SUM(auto_assigned) AS auto
     FROM requests
-    WHERE status != 'cancelled'
-      AND (assigned_at IS NOT NULL OR (julianday('now') - julianday(created_at)) * 24 > 24)`).get();
+    WHERE status != 'cancelled' AND avail_start IS NOT NULL`).get();
 
   res.json({
     total: byStatus.reduce((s, x) => s + x.count, 0),
@@ -35,7 +33,7 @@ router.get('/', authenticate, authorize('admin'), (req, res) => {
     byType,
     kpi: {
       avgResolveHours: avgHours == null ? null : Number(avgHours.toFixed(1)),
-      assignedWithin24hPct: assign.total ? Math.round((assign.within / assign.total) * 100) : null,
+      autoAssignedPct: auto.total ? Math.round((auto.auto / auto.total) * 100) : null,
       // KPI 3: เวลาตอบสนอง API เฉลี่ย (เป้าหมาย < 500ms) วัดจาก middleware ใน server.js
       avgApiMs: metrics.average(),
     },
