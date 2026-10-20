@@ -1,0 +1,26 @@
+{
+  "name": "dormitory-repair-v2",
+  "version": "2.0.0",
+  "description": "ระบบแจ้งซ่อมหอพัก v2 — จองคิวช่างแบบกดเลือกช่องเวลา (Vue 3 + Express + SQLite + JWT)",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"node --watch server/index.js\" \"vite\"",
+    "build": "vite build",
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0",
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.10",
+    "concurrently": "^10.0.6",
+    "vite": "^8.3.4"
+  }
+}
